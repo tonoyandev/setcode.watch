@@ -41,7 +41,7 @@ jobs:
       DATABASE_URL: postgresql://setcode:setcode@localhost:5432/setcode_test
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v4
 
