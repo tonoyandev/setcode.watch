@@ -1,0 +1,133 @@
+# deps
+node_modules/
+.pnpm-store/
+jspm_packages/
+
+# build output
+dist/
+build/
+.nuxt/
+.output/
+out/
+cache/
+broadcast/
+*.tsbuildinfo
+.next/
+.svelte-kit/
+
+# env + secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+infra/.env
+*.env.local
+secrets/
+secrets.json
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.keystore
+*.asc
+*.gpg
+id_rsa
+id_ed25519
+*.wallet
+*.mnemonic
+seed.txt
+keystore/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+logs/
+
+# editor / IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.history/
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/lib/
+contracts/.gas-snapshot.tmp
+
+# ponder / indexer
+indexer/.ponder/
+indexer/generated/
+
+# database / local state
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.sql.gz
+pgdata/
+postgres-data/
+redis-data/
+
+# coverage / test artifacts
+coverage/
+*.lcov
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# caches
+.turbo/
+.cache/
+.parcel-cache/
+.rpt2_cache/
+.rts2_cache_*/
+.eslintcache
+.stylelintcache
+
+# deploy targets
+.vercel/
+.netlify/
+.serverless/
+.firebase/
+.fly/
+
+# local tooling state
+.claude/
+.cursor/
+.aider*
+.continue/
+.zed/
+
+# misc
+*.bak
+*.tmp
+*.orig
+.direnv/
+.envrc
+.tool-versions

@@ -1,0 +1,59 @@
+name: contracts
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/**'
+      - '.github/workflows/contracts.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/**'
+      - '.github/workflows/contracts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: forge test + snapshot
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Show forge version
+        run: forge --version
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Test
+        run: FOUNDRY_PROFILE=ci forge test -vvv
+
+      - name: Gas snapshot check
+        run: forge snapshot --check --tolerance 2
+
+  slither:
+    name: slither
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run Slither
+        uses: crytic/slither-action@v0.4.0
+        with:
+          target: contracts/
+          fail-on: medium
+          slither-args: --exclude-dependencies

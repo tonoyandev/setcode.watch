@@ -1,0 +1,57 @@
+name: watcher
+
+on:
+  pull_request:
+    paths:
+      - 'watcher/**'
+      - 'shared/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/watcher.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'watcher/**'
+      - 'shared/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/watcher.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: setcode
+          POSTGRES_PASSWORD: setcode
+          POSTGRES_DB: setcode_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://setcode:setcode@localhost:5432/setcode_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter watcher typecheck
+
+      - run: pnpm --filter watcher test

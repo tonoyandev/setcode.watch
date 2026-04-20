@@ -1,0 +1,29 @@
+{
+  "name": "setcode-watch",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Monitoring and alerting for EIP-7702 delegated accounts on Ethereum",
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22.11.0",
+    "pnpm": ">=9.15.0"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10",
+    "typescript": "^5.7.2"
+  }
+}
