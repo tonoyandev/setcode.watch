@@ -71,11 +71,10 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# foundry
+# foundry (lib/ is tracked via git submodules, do not ignore)
 contracts/out/
 contracts/cache/
 contracts/broadcast/
-contracts/lib/
 contracts/.gas-snapshot.tmp
 
 # ponder / indexer
