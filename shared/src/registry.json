@@ -1,0 +1,38 @@
+[
+  {
+    "placeholder": true,
+    "name": "Safe Singleton",
+    "website": "https://safe.global",
+    "notes": "TODO(verify): Safe's EIP-7702 delegation target on Ethereum mainnet. Do not classify as verified until address is confirmed from Safe's official release."
+  },
+  {
+    "placeholder": true,
+    "name": "ZeroDev Kernel v3",
+    "website": "https://zerodev.app",
+    "notes": "TODO(verify): ZeroDev Kernel v3 7702-compatible implementation on Ethereum mainnet."
+  },
+  {
+    "placeholder": true,
+    "name": "Alchemy Modular Account v2",
+    "website": "https://www.alchemy.com/smart-wallets",
+    "notes": "TODO(verify): Alchemy Modular Account v2 delegation target on Ethereum mainnet."
+  },
+  {
+    "placeholder": true,
+    "name": "Biconomy Nexus",
+    "website": "https://biconomy.io",
+    "notes": "TODO(verify): Biconomy Nexus 7702 delegation target on Ethereum mainnet."
+  },
+  {
+    "placeholder": true,
+    "name": "Ambire Account",
+    "website": "https://ambire.com",
+    "notes": "TODO(verify): Ambire smart account 7702 delegation target on Ethereum mainnet."
+  },
+  {
+    "placeholder": true,
+    "name": "MetaMask Smart Account",
+    "website": "https://metamask.io",
+    "notes": "TODO(verify): MetaMask smart account 7702 delegation target on Ethereum mainnet."
+  }
+]
