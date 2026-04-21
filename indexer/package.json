@@ -1,0 +1,27 @@
+{
+  "name": "@setcode/indexer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Ponder indexer for EIP-7702 delegations and SetCode contract events",
+  "license": "MIT",
+  "scripts": {
+    "dev": "ponder dev",
+    "start": "ponder start",
+    "codegen": "ponder codegen",
+    "lint": "ponder lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@setcode/shared": "workspace:*",
+    "hono": "^4.6.13",
+    "ponder": "^0.16.6",
+    "viem": "^2.21.45"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
