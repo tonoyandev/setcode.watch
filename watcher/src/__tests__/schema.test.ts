@@ -33,12 +33,13 @@ describe('watcher schema migration', () => {
     await db.close();
   });
 
-  it('creates all four tables', async () => {
+  it('creates all expected tables', async () => {
     const { rows } = await db.query<{ table_name: string }>(
       "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name",
     );
     expect(rows.map((r) => r.table_name).filter((n) => !n.startsWith('__'))).toEqual([
       'alerts_sent',
+      'dispatcher_cursor',
       'manage_tokens',
       'pending_confirmations',
       'subscriptions',

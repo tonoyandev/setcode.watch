@@ -1,16 +1,25 @@
 import { serve } from '@hono/node-server';
 import { createBot } from './bot/index.js';
 import { createDatabase } from './db/client.js';
+import { startDispatcherLoop } from './dispatcher/loop.js';
 import { createHttpApp } from './http/server.js';
 import {
+  alertRetentionDays,
   confirmationTtlSeconds,
   corsOrigins,
+  dispatchBatchSize,
   httpPort,
   maxSubscriptionsPerChat,
+  pollIntervalMs,
   requireBotUsername,
   requireTelegramToken,
+  retentionSweepBatchSize,
+  retentionSweepIntervalMs,
 } from './lib/env.js';
+import { createClassificationService } from './services/classification.js';
 import { createConfirmationsService } from './services/confirmations.js';
+import { createDispatcherService } from './services/dispatcher.js';
+import { createTelegramClient } from './telegram/client.js';
 
 async function main() {
   const token = requireTelegramToken();
@@ -25,6 +34,17 @@ async function main() {
   const bot = createBot({ token, service });
   const app = createHttpApp({ service, botUsername, corsOrigins: corsOrigins() });
 
+  const classification = createClassificationService(db);
+  const telegram = createTelegramClient(token);
+  const dispatcher = createDispatcherService(
+    { db, telegram, classification },
+    {
+      batchSize: dispatchBatchSize(),
+      retentionDays: alertRetentionDays(),
+      retentionBatchSize: retentionSweepBatchSize(),
+    },
+  );
+
   const port = httpPort();
   const httpServer = serve({ fetch: app.fetch, port });
   console.log(`[setcode/watcher] HTTP listening on :${port}`);
@@ -32,8 +52,14 @@ async function main() {
   await bot.launch();
   console.log(`[setcode/watcher] bot @${botUsername} running`);
 
+  const loop = startDispatcherLoop(dispatcher, {
+    pollIntervalMs: pollIntervalMs(),
+    retentionSweepIntervalMs: retentionSweepIntervalMs(),
+  });
+
   const shutdown = async (signal: string) => {
     console.log(`[setcode/watcher] ${signal} received, shutting down…`);
+    await loop.stop();
     bot.stop(signal);
     httpServer.close();
     await db.close();

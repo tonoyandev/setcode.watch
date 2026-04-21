@@ -15,6 +15,13 @@
       "when": 1776757707024,
       "tag": "0001_fair_groot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776759567200,
+      "tag": "0002_smart_starjammers",
+      "breakpoints": true
     }
   ]
 }

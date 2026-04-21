@@ -55,3 +55,21 @@ export function corsOrigins(): string[] {
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 }
+
+export function pollIntervalMs(): number {
+  return optionalIntEnv('WATCHER_POLL_INTERVAL_MS', 5000);
+}
+
+export function dispatchBatchSize(): number {
+  return optionalIntEnv('WATCHER_DISPATCH_BATCH_SIZE', 100);
+}
+
+// Max new events fanned into alerts per tick. Caps downstream work during
+// backlog catch-up so the event loop does not stall.
+export function retentionSweepIntervalMs(): number {
+  return optionalIntEnv('WATCHER_RETENTION_SWEEP_INTERVAL_MS', 60 * 60 * 1000);
+}
+
+export function retentionSweepBatchSize(): number {
+  return optionalIntEnv('WATCHER_RETENTION_SWEEP_BATCH_SIZE', 10000);
+}

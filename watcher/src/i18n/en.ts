@@ -22,6 +22,14 @@ export const en = {
     'Unsubscribed from {eoa}. You will no longer receive alerts for this address in this chat.',
   'remove.notFound': 'You were not subscribed to {eoa} in this chat.',
   'error.generic': 'Something went wrong handling that command. Please try again.',
+  'alert.title.malicious': '⚠️ Malicious delegation detected',
+  'alert.title.verified': '✅ Verified delegation change',
+  'alert.title.unknown': '❔ New delegation target',
+  'alert.title.revoked': 'ℹ️ Delegation revoked',
+  'alert.body':
+    '<b>{title}</b>\n\nAddress: <code>{eoa}</code>\nOld target: {oldTarget}\nNew target: {newTarget}\nTx: {txLink}',
+  'alert.target.none': '<i>(none)</i>',
+  'alert.target.value': '<code>{target}</code> — {classification}',
 } as const;
 
 export type MessageKey = keyof typeof en;

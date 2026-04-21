@@ -91,6 +91,19 @@ export const alertsSent = pgTable(
   }),
 );
 
+// Singleton cursor (id always 1) tracking the last delegation_event the
+// dispatcher has processed. We order Ponder events by (block_number, id)
+// and advance this row after each event's alerts_sent writes settle.
+// First-boot initialisation sets the cursor to the current head so that
+// historical events do not fan out as alerts.
+export const dispatcherCursor = pgTable('dispatcher_cursor', {
+  id: integer('id').primaryKey(),
+  lastBlock: bigint('last_block', { mode: 'bigint' }).notNull(),
+  lastId: text('last_id').notNull(),
+  initialisedAt: timestamp('initialised_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const manageTokens = pgTable(
   'manage_tokens',
   {
@@ -112,3 +125,5 @@ export type AlertSent = typeof alertsSent.$inferSelect;
 export type NewAlertSent = typeof alertsSent.$inferInsert;
 export type ManageToken = typeof manageTokens.$inferSelect;
 export type NewManageToken = typeof manageTokens.$inferInsert;
+export type DispatcherCursor = typeof dispatcherCursor.$inferSelect;
+export type NewDispatcherCursor = typeof dispatcherCursor.$inferInsert;

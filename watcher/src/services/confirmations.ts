@@ -1,10 +1,10 @@
 import { and, eq, lt } from 'drizzle-orm';
-import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import type { Address } from 'viem';
+import type { Db } from '../db/client.js';
 import * as schema from '../db/schema.js';
 import { newConfirmationCode } from '../lib/code.js';
 
-export type WatcherDb = PgDatabase<PgQueryResultHKT, typeof schema>;
+export type WatcherDb = Db;
 
 export interface ConfirmationsServiceOptions {
   confirmationTtlSeconds: number;

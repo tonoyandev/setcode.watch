@@ -4,12 +4,13 @@ Alerting service for SetCode.watch. Owns the Postgres schema, the Telegram bot, 
 
 ## What ships today
 
-- **Database** — four tables managed via Drizzle. See [src/db/schema.ts](src/db/schema.ts).
+- **Database** — five tables managed via Drizzle. See [src/db/schema.ts](src/db/schema.ts).
 - **Confirmations service** — pure business logic for the EOA ↔ Telegram binding flow. 5-minute code TTL, 10-subs-per-chat soft cap (env-tunable).
 - **Telegram bot** (Telegraf, long polling) — commands `/start`, `/help`, `/list`, `/remove <address>`.
 - **HTTP API** (Hono) — `POST /confirmations` creates a pending code and returns a `t.me` deep-link for the web app to render.
+- **Alert dispatcher** — polls Ponder's `delegation_event` table every ~5s (±10% jitter), resolves classifications, fans alerts to confirmed subscribers, and keeps a singleton cursor so no event is fanned twice. Retention sweep runs hourly.
 
-The alert dispatch loop and the `/manage` token flow land in subsequent steps.
+The `/manage` token flow and the Nuxt web app land in subsequent steps.
 
 ## Confirmation flow
 
@@ -45,6 +46,7 @@ Codes are 16-char base62 with a `c_` prefix (≈95 bits entropy). The prefix let
 | `pending_confirmations` | Short-lived codes. 5-minute default TTL. No chat_id column — set at confirm time. |
 | `alerts_sent`           | Dispatch audit log. Idempotent on `(tx_hash, telegram_chat_id)`.          |
 | `manage_tokens`         | Opaque UUIDs for the web `/manage` flow. Revoke via bot command.          |
+| `dispatcher_cursor`     | Singleton (id = 1). `(last_block, last_id)` tuple marking the last delegation event fanned to alerts. |
 
 Keys and invariants:
 
@@ -74,6 +76,23 @@ CORS allow-list is configured via `WATCHER_CORS_ORIGIN` (comma-separated). Defau
 | `/remove <eoa>`     | Unsubscribes this chat from the given EOA.                    |
 
 All user-facing strings live in `src/i18n/en.ts` and route through `t(key, vars)`. A later step will swap that for a multi-locale layer with zero caller changes.
+
+## Alert dispatcher
+
+The dispatcher is an in-process polling loop launched alongside the bot and HTTP API. It reads Ponder's `delegation_event` / `registry_classification_state` tables (see [src/db/ponder-read.ts](src/db/ponder-read.ts)) and writes to the watcher's own tables.
+
+Per tick:
+
+1. Read `dispatcher_cursor` (singleton, id = 1). On first boot the cursor is initialised at the current head of `delegation_event` so historical events do not fan out.
+2. Fetch up to `WATCHER_DISPATCH_BATCH_SIZE` events with `(block_number, id) > cursor`, ordered by `(block_number, id)`.
+3. For each event: look up confirmed subscribers for the EOA, skip chats already in `alerts_sent` for this tx, classify old/new targets, build the message, send via Telegram.
+4. On **ok**: insert `alerts_sent` (ON CONFLICT DO NOTHING) and advance the cursor past this event.
+5. On **permanent** failure (`403 Forbidden`, `chat not found`, etc.): log and advance — the chat is unreachable and will not be retried.
+6. On **transient** failure (`429`, `5xx`, network): stop, do not advance the cursor. Next tick's preflight skips chats we already delivered to, so retries are idempotent.
+
+Retention runs every `WATCHER_RETENTION_SWEEP_INTERVAL_MS` (default 1 hour) inside the same loop. It deletes `alerts_sent` rows older than `ALERT_RETENTION_DAYS`, in batches of `WATCHER_RETENTION_SWEEP_BATCH_SIZE`, to avoid long locks during catch-up.
+
+Classification resolution order: on-chain `registry_classification_state` → `@setcode/shared` static registry → `unknown`. The on-chain registry wins so targets can be downgraded (verified → malicious) without a package release.
 
 ## i18n
 
@@ -113,9 +132,12 @@ pnpm --filter @setcode/watcher test          # vitest + pglite
 
 ## Tests
 
-34 tests across four suites:
+53 tests across seven suites:
 
 - `schema.test.ts` — migrations apply cleanly, UNIQUE and CHECK constraints fire correctly against pglite.
 - `confirmations.test.ts` — service behaviour end-to-end against a real Postgres: happy path, expired TTL, already subscribed, soft cap, many-to-many, remove, sweep.
 - `handlers.test.ts` — pure handler logic with a mocked service. Covers payload parsing, `t()` rendering, and EOA lowercase normalisation.
 - `http.test.ts` — Hono `app.request()` tests covering happy path, bad JSON, missing fields, and bad EOA.
+- `messages.test.ts` — alert message formatter: malicious / verified / unknown / revoked headlines, explorer link fallback.
+- `classification.test.ts` — on-chain registry state wins; static-registry and `unknown` fallbacks.
+- `dispatcher.test.ts` — cursor init at head, fan-out to multiple subscribers, transient retry without duplicate sends, permanent failure advances cursor, ordering by `(block_number, id)`, retention sweep.
