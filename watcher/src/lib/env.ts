@@ -35,3 +35,23 @@ export function alertRetentionDays(): number {
 export function maxSubscriptionsPerChat(): number {
   return optionalIntEnv('MAX_SUBSCRIPTIONS_PER_CHAT', 10);
 }
+
+export function requireTelegramToken(): string {
+  return requireEnv('TELEGRAM_BOT_TOKEN');
+}
+
+export function requireBotUsername(): string {
+  return requireEnv('TELEGRAM_BOT_USERNAME');
+}
+
+export function httpPort(): number {
+  return optionalIntEnv('WATCHER_HTTP_PORT', 8787);
+}
+
+export function corsOrigins(): string[] {
+  const raw = process.env.WATCHER_CORS_ORIGIN ?? 'http://localhost:3000';
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}

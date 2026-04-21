@@ -38,18 +38,21 @@ export const subscriptions = pgTable(
   }),
 );
 
+// pending_confirmations holds unbound codes. The chat id is unknown at
+// creation (web-first flow: user types EOA → site generates code → user
+// clicks Telegram deep-link → bot captures chat id on /start) and is
+// written onto the subscriptions row at confirmation time.
 export const pendingConfirmations = pgTable(
   'pending_confirmations',
   {
     code: text('code').primaryKey(),
     eoa: text('eoa').notNull(),
-    telegramChatId: bigint('telegram_chat_id', { mode: 'bigint' }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
   (t) => ({
     ixExpires: index('pending_confirmations_expires_ix').on(t.expiresAt),
-    ixEoaChat: index('pending_confirmations_eoa_chat_ix').on(t.eoa, t.telegramChatId),
+    ixEoa: index('pending_confirmations_eoa_ix').on(t.eoa),
     ckEoaFormat: check('pending_confirmations_eoa_lowerhex_ck', EOA_LOWERHEX),
   }),
 );
