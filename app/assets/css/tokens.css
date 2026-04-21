@@ -1,0 +1,142 @@
+/*
+ * SetCode.watch design tokens
+ *
+ * Warm, minimal, security-serious. Paper-cream background, deep ink text,
+ * ochre as the single brand accent. Classification colors intentionally
+ * muted so a malicious badge reads as concern rather than marketing red.
+ *
+ * Change policy: add new tokens freely, renaming a token counts as a
+ * breaking change. Every raw color / spacing value in components should
+ * reference a token — there is no second source of truth.
+ */
+
+:root {
+  /* ------------------------------------------------------------------ */
+  /* Color — neutrals (warm grayscale, not pure)                         */
+  /* ------------------------------------------------------------------ */
+
+  --color-bg-page: #faf7f2; /* paper cream */
+  --color-bg-surface: #ffffff; /* card / elevated */
+  --color-bg-subtle: #f3eee5; /* section dividers, disabled */
+  --color-bg-inset: #ece6da; /* inputs, code blocks */
+
+  --color-ink-strong: #1a1815; /* headlines, primary copy */
+  --color-ink: #2a2722; /* body copy */
+  --color-ink-muted: #6b645a; /* secondary copy, labels */
+  --color-ink-subtle: #97907f; /* timestamps, helper text */
+
+  --color-border: #e3ddd0;
+  --color-border-strong: #c9c2b0;
+
+  /* ------------------------------------------------------------------ */
+  /* Color — brand & classification                                      */
+  /* ------------------------------------------------------------------ */
+
+  --color-brand: #a85a1c; /* ochre, used sparingly */
+  --color-brand-hover: #8f4a14;
+  --color-brand-ink: #ffffff;
+
+  --color-verified: #2d6a4f; /* forest green, not neon */
+  --color-verified-bg: #e6efe9;
+  --color-verified-border: #b9cfc3;
+
+  --color-unknown: #6b645a; /* same as ink-muted intentionally */
+  --color-unknown-bg: #efeae1;
+  --color-unknown-border: #d2cbbc;
+
+  --color-malicious: #9b2c2c; /* brick red */
+  --color-malicious-bg: #f4e4e3;
+  --color-malicious-border: #d9b8b5;
+
+  /* Semantic aliases used by components */
+  --color-focus-ring: #a85a1c;
+  --color-error: var(--color-malicious);
+  --color-success: var(--color-verified);
+
+  /* ------------------------------------------------------------------ */
+  /* Typography                                                          */
+  /* ------------------------------------------------------------------ */
+
+  --font-sans: "Inter", "Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+
+  /* Type scale — 1.200 minor-third ramp, rounded to even px */
+  --text-xs: 0.75rem; /* 12 */
+  --text-sm: 0.875rem; /* 14 */
+  --text-base: 1rem; /* 16 */
+  --text-lg: 1.125rem; /* 18 */
+  --text-xl: 1.375rem; /* 22 */
+  --text-2xl: 1.75rem; /* 28 */
+  --text-3xl: 2.25rem; /* 36 */
+  --text-4xl: 3rem; /* 48 */
+
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.55;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ------------------------------------------------------------------ */
+  /* Spacing — 4px base                                                  */
+  /* ------------------------------------------------------------------ */
+
+  --space-1: 0.25rem; /* 4 */
+  --space-2: 0.5rem; /* 8 */
+  --space-3: 0.75rem; /* 12 */
+  --space-4: 1rem; /* 16 */
+  --space-5: 1.25rem; /* 20 */
+  --space-6: 1.5rem; /* 24 */
+  --space-8: 2rem; /* 32 */
+  --space-10: 2.5rem; /* 40 */
+  --space-12: 3rem; /* 48 */
+  --space-16: 4rem; /* 64 */
+  --space-20: 5rem; /* 80 */
+  --space-24: 6rem; /* 96 */
+
+  /* ------------------------------------------------------------------ */
+  /* Radii, shadows, borders                                             */
+  /* ------------------------------------------------------------------ */
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 9999px;
+
+  --border-width: 1px;
+
+  --shadow-sm: 0 1px 2px rgba(26, 24, 21, 0.04);
+  --shadow-md: 0 2px 6px rgba(26, 24, 21, 0.06), 0 1px 2px rgba(26, 24, 21, 0.04);
+  --shadow-lg: 0 8px 24px rgba(26, 24, 21, 0.08), 0 2px 6px rgba(26, 24, 21, 0.05);
+
+  /* ------------------------------------------------------------------ */
+  /* Motion                                                              */
+  /* ------------------------------------------------------------------ */
+
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ------------------------------------------------------------------ */
+  /* Layout                                                              */
+  /* ------------------------------------------------------------------ */
+
+  --width-content: 68ch; /* prose column */
+  --width-page: 1120px; /* page max */
+
+  /* Icon sizing — step 9 Q3 decision: 14 inline / 20 card / 32 hero */
+  --icon-inline: 14px;
+  --icon-card: 20px;
+  --icon-hero: 32px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+  }
+}
