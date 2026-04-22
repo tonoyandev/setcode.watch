@@ -10,7 +10,7 @@ Alerting service for SetCode.watch. Owns the Postgres schema, the Telegram bot, 
 - **HTTP API** (Hono) — `POST /confirmations` creates a pending code and returns a `t.me` deep-link for the web app to render.
 - **Alert dispatcher** — polls Ponder's `delegation_event` table every ~5s (±10% jitter), resolves classifications, fans alerts to confirmed subscribers, and keeps a singleton cursor so no event is fanned twice. Retention sweep runs hourly.
 
-The `/manage` token flow and the Nuxt web app land in subsequent steps.
+The `/manage` token flow and registry-browser read endpoints are now live for the Nuxt web app.
 
 ## Confirmation flow
 
@@ -61,6 +61,10 @@ Keys and invariants:
 GET  /health                 → 200 { ok: true }
 POST /confirmations          → 200 { code, deepLink, expiresAt }
                                400 { error: 'invalid_json' | 'invalid_body' | 'invalid_eoa' }
+POST /check                  → 200 { eoa, chainId, currentTarget, classification, source, lastUpdated }
+GET  /manage/:token          → 200 { subscriptions[] } | 404 { error: 'not_found' }
+POST /manage/:token/remove   → 200 { removed } | 404 { error: 'not_found' }
+GET  /registry               → 200 { entries[], nextCursor } (query: classification?, cursor?, limit?)
 ```
 
 CORS allow-list is configured via `WATCHER_CORS_ORIGIN` (comma-separated). Default `http://localhost:3000` for the Nuxt dev server.

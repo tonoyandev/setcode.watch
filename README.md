@@ -19,7 +19,7 @@ No custody, no private keys, no transaction signing. The service only watches.
 
 ## Status
 
-**Pre-MVP, mid-build.** 12 of 16 bootstrap steps complete; step 12 (`/manage` flow) just shipped.
+**Pre-MVP, mid-build.** 13 of 16 bootstrap steps complete; step 13 (registry browser) just shipped.
 
 | Step | Area | State |
 | ---- | ---- | ----- |
@@ -35,12 +35,12 @@ No custody, no private keys, no transaction signing. The service only watches.
 | 10 | `/check` flow — lookup + classification card | done |
 | 11 | `/subscribe` flow — EOA → Telegram binding UI | done |
 | 12 | `/manage` flow — token-gated subscription manager | **done** |
-| 13 | Registry browser | pending |
+| 13 | Registry browser | **done** |
 | 14 | `docker-compose` + Caddy for self-host | pending |
 | 15 | Docs (governance, threat model, operator runbook) | pending |
 | 16 | CI workflows + Prometheus metrics | pending |
 
-Test counts at HEAD: **100 passing** (74 watcher + 0 indexer unit* + 26 app).
+Test counts at HEAD: **104 passing** (78 watcher + 0 indexer unit* + 26 app).
 *Indexer has unit tests for the delegation-designator parser; mainnet-fork tests land later.
 
 ---
@@ -219,7 +219,7 @@ Cost note: the block handler does one extra `eth_getBlockByNumber` per block (~7
 Runs three in-process subsystems sharing one Postgres instance:
 
 - **Telegram bot** (Telegraf, long polling) — commands `/start c_<code>`, `/help`, `/list`, `/remove <addr>`, `/manage`.
-- **HTTP API** (Hono) — `GET /health`, `POST /confirmations`, `POST /check`, `GET /manage/:token`, `POST /manage/:token/remove`.
+- **HTTP API** (Hono) — `GET /health`, `POST /confirmations`, `POST /check`, `GET /manage/:token`, `POST /manage/:token/remove`, `GET /registry`.
 - **Alert dispatcher** — ~5s poll loop (±10% jitter) that reads the indexer's `delegation_event` table, classifies, fans out to Telegram, advances a singleton cursor. Transient failures halt and retry; permanent failures (`403`, `chat not found`) log and advance.
 
 Retention sweep runs hourly in the same loop and deletes `alerts_sent` rows older than `ALERT_RETENTION_DAYS` in bounded batches.
@@ -228,33 +228,29 @@ Five tables: `subscriptions`, `pending_confirmations`, `alerts_sent`, `manage_to
 
 ### `app/`
 
-Nuxt 3.21 SSR app. Shipped through step 12:
+Nuxt 3.21 SSR app. Shipped through step 13:
 
 - Design tokens (`assets/css/tokens.css`) — warm minimal palette, spacing scale, type scale, iconography sizes (`--icon-inline: 14px`, `--icon-card: 20px`, `--icon-hero: 32px`).
 - Reset + baseline (`reset.css`, `base.css`).
 - Primitives with `G` prefix: `GButton`, `GInput`, `GCard`, `GBadge`, `GAddress`, `GCodeBlock`.
   - Under `exactOptionalPropertyTypes: true` the primitives spread optional attributes via `v-bind="attrs"` so undefined values are omitted from the DOM rather than bound literally.
-- `useWatcherApi` composable wrapping `$fetch`, with an exported pure `mapError(err)` that translates watcher error codes to `WatcherApiError`, a typed discriminated union. Covers `/confirmations`, `/check`, and both `/manage/:token` endpoints.
+- `useWatcherApi` composable wrapping `$fetch`, with an exported pure `mapError(err)` that translates watcher error codes to `WatcherApiError`, a typed discriminated union. Covers `/confirmations`, `/check`, both `/manage/:token` endpoints, and `/registry`.
 - EN-only i18n (`i18n/en.ts`, `i18n/index.ts`) — flat keys, `t(key, vars)`, shape-compatible with a future i18n library.
 - Pages:
   - `pages/index.vue` — landing (hero + how + why).
   - `pages/check.vue` — input → `POST /check`, renders classification card with `GBadge` + `GAddress`, surfaces classification source (registry / static / unknown), CTA links to subscribe.
   - `pages/subscribe.vue` — input → `POST /confirmations`, pre-fills from `?eoa=…`, renders Telegram deep-link CTA with live countdown to `expiresAt`, copy-code fallback.
   - `pages/manage/[token].vue` — lists the chat's confirmed EOAs via `GET /manage/:token` and removes them via `POST /manage/:token/remove`, with per-row remove state and revoked-token recovery.
-  - `pages/registry.vue` — stub; lands in step 13.
+  - `pages/registry.vue` — registry browser with class filter, newest-first sort, and pagination backed by watcher `GET /registry`.
 - Sticky header + footer layout with monospace brand mark.
 
 26 tests across 6 files (component primitives + composable + i18n), running on happy-dom.
 
 ---
 
-## Roadmap (steps 13-16)
+## Roadmap (steps 14-16)
 
-Rough notes to help pick up where step 12 left off.
-
-### Step 13 — Registry browser
-
-Read-only list of `SetCodeRegistry` classifications with filter by class, sort by `lastClassifiedAt`, pagination. Pulls from the indexer's `registry_classification_state` table via a new watcher endpoint (or directly if we decide on a read-through pattern).
+Rough notes to help pick up where step 13 left off.
 
 ### Step 14 — Deploy surface
 

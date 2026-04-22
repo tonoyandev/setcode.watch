@@ -116,6 +116,25 @@ export const en = {
   'manage.refresh': 'Refresh',
 
   // --------------------------------------------------------------------
+  // Registry page
+  // --------------------------------------------------------------------
+  'registry.title': 'Registry browser',
+  'registry.intro':
+    'Browse current SetCodeRegistry classifications indexed from mainnet. Sort is newest-first by last classification update.',
+  'registry.filter.all': 'All',
+  'registry.filter.verified': 'Verified',
+  'registry.filter.unknown': 'Unknown',
+  'registry.filter.malicious': 'Malicious',
+  'registry.loading': 'Loading registry entries…',
+  'registry.empty': 'No registry entries match this filter yet.',
+  'registry.reason': 'Reason',
+  'registry.lastClassifiedAt': 'Last classified',
+  'registry.prev': 'Previous',
+  'registry.next': 'Next',
+  'registry.page': 'Page {page}',
+  'registry.refresh': 'Refresh',
+
+  // --------------------------------------------------------------------
   // Shared errors
   // --------------------------------------------------------------------
   'error.network': 'Could not reach the service. Check your connection and try again.',

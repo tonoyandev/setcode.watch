@@ -122,6 +122,7 @@ playwright/.cache/
 .aider*
 .continue/
 .zed/
+graphify-out/
 
 # misc
 *.bak

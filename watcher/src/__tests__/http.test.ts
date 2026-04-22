@@ -3,11 +3,13 @@ import { createHttpApp } from '../http/server.js';
 import type { CheckService } from '../services/check.js';
 import type { ConfirmationsService } from '../services/confirmations.js';
 import type { ManageService } from '../services/manage.js';
+import type { RegistryService } from '../services/registry.js';
 
 function makeApp(
   overrides: Partial<ConfirmationsService> = {},
   checkOverrides: Partial<CheckService> = {},
   manageOverrides: Partial<ManageService> = {},
+  registryOverrides: Partial<RegistryService> = {},
 ) {
   const service = {
     createPending: vi.fn(),
@@ -32,14 +34,20 @@ function makeApp(
     ...manageOverrides,
   } as unknown as ManageService;
 
+  const registryService = {
+    list: vi.fn(),
+    ...registryOverrides,
+  } as unknown as RegistryService;
+
   const app = createHttpApp({
     service,
     checkService,
     manageService,
+    registryService,
     botUsername: 'SetCodeBot',
     corsOrigins: ['http://localhost:3000'],
   });
-  return { app, service, checkService, manageService };
+  return { app, service, checkService, manageService, registryService };
 }
 
 describe('HTTP API', () => {
@@ -266,5 +274,43 @@ describe('HTTP API', () => {
     expect(badEoa.status).toBe(400);
     expect(await badEoa.json()).toEqual({ error: 'invalid_eoa' });
     expect(check).not.toHaveBeenCalled();
+  });
+
+  it('GET /registry returns paginated entries and optional cursor', async () => {
+    const list = vi.fn().mockResolvedValue({
+      entries: [
+        {
+          target: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          classification: 'verified',
+          reason: 'reviewed',
+          lastClassifiedAt: 1700000000,
+        },
+      ],
+      nextCursor: 25,
+    });
+    const { app } = makeApp({}, {}, {}, { list });
+
+    const res = await app.request('/registry?classification=verified&limit=25');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      entries: [
+        {
+          target: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          classification: 'verified',
+          reason: 'reviewed',
+          lastClassifiedAt: 1700000000,
+        },
+      ],
+      nextCursor: 25,
+    });
+    expect(list).toHaveBeenCalledWith({ classification: 'verified', limit: 25 });
+  });
+
+  it('GET /registry rejects malformed query params', async () => {
+    const { app, registryService } = makeApp();
+    const res = await app.request('/registry?classification=nope&cursor=-1');
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'invalid_query' });
+    expect(registryService.list).not.toHaveBeenCalled();
   });
 });

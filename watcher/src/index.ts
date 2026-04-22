@@ -23,6 +23,7 @@ import { createClassificationService } from './services/classification.js';
 import { createConfirmationsService } from './services/confirmations.js';
 import { createDispatcherService } from './services/dispatcher.js';
 import { createManageService } from './services/manage.js';
+import { createRegistryService } from './services/registry.js';
 import { createTelegramClient } from './telegram/client.js';
 
 async function main() {
@@ -44,10 +45,12 @@ async function main() {
     chainId: CHAIN_ID_MAINNET,
     classification,
   });
+  const registryService = createRegistryService(db);
   const app = createHttpApp({
     service,
     checkService,
     manageService,
+    registryService,
     botUsername,
     corsOrigins: corsOrigins(),
   });

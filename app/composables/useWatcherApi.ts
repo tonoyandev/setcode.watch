@@ -37,6 +37,17 @@ export interface ManageRemoveResponse {
   removed: boolean;
 }
 
+export interface RegistryEntry {
+  target: Address;
+  classification: Classification;
+  reason: string;
+  lastClassifiedAt: number;
+}
+export interface RegistryListResponse {
+  entries: RegistryEntry[];
+  nextCursor: number | null;
+}
+
 // Error shape for the watcher API. `kind` matches the error strings the
 // watcher returns so UI can branch on a stable enum rather than regex-match
 // human-readable text.
@@ -45,6 +56,7 @@ export type WatcherApiError =
   | { kind: 'invalid_body' }
   | { kind: 'invalid_eoa' }
   | { kind: 'invalid_token' }
+  | { kind: 'invalid_query' }
   | { kind: 'not_found' }
   | { kind: 'network' }
   | { kind: 'unknown'; status: number };
@@ -61,6 +73,11 @@ interface WatcherApiClient {
   check(eoa: Address): Promise<CheckResponse>;
   listManage(token: string): Promise<ManageListResponse>;
   removeManage(token: string, eoa: Address): Promise<ManageRemoveResponse>;
+  listRegistry(input?: {
+    classification?: Classification;
+    cursor?: number;
+    limit?: number;
+  }): Promise<RegistryListResponse>;
 }
 
 // Thin wrapper over the watcher HTTP API. Uses Nuxt's ofetch under the hood
@@ -119,7 +136,31 @@ export function useWatcherApi(): WatcherApiClient {
     }
   }
 
-  return { createConfirmation, check, listManage, removeManage };
+  async function listRegistry(
+    input: {
+      classification?: Classification;
+      cursor?: number;
+      limit?: number;
+    } = {},
+  ): Promise<RegistryListResponse> {
+    const params = new URLSearchParams();
+    if (input.classification) params.set('classification', input.classification);
+    if (input.cursor !== undefined) params.set('cursor', String(input.cursor));
+    if (input.limit !== undefined) params.set('limit', String(input.limit));
+    const query = params.toString();
+    const path = query.length > 0 ? `/registry?${query}` : '/registry';
+
+    try {
+      return await $fetch<RegistryListResponse>(path, {
+        baseURL: baseUrl,
+        method: 'GET',
+      });
+    } catch (err: unknown) {
+      throw new WatcherApiException(mapError(err));
+    }
+  }
+
+  return { createConfirmation, check, listManage, removeManage, listRegistry };
 }
 
 // Exported for unit tests. Keeping this as a pure function lets us verify the
@@ -142,6 +183,7 @@ export function mapError(err: unknown): WatcherApiError {
     code === 'invalid_body' ||
     code === 'invalid_eoa' ||
     code === 'invalid_token' ||
+    code === 'invalid_query' ||
     code === 'not_found'
   ) {
     return { kind: code };
