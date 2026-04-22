@@ -19,7 +19,7 @@ No custody, no private keys, no transaction signing. The service only watches.
 
 ## Status
 
-**Pre-MVP, mid-build.** 8 of 16 bootstrap steps complete; step 9 (web app scaffold) just shipped.
+**Pre-MVP, mid-build.** 12 of 16 bootstrap steps complete; step 12 (`/manage` flow) just shipped.
 
 | Step | Area | State |
 | ---- | ---- | ----- |
@@ -31,16 +31,16 @@ No custody, no private keys, no transaction signing. The service only watches.
 | 6 | Watcher DB schema + migrations | done |
 | 7 | Watcher Telegram bot + HTTP API + confirmation flow | done |
 | 8 | Watcher alert dispatcher + retention sweep | done |
-| 9 | Nuxt web app scaffold + primitives + landing page | **done** |
-| 10 | `/check` flow — lookup + classification card | pending |
-| 11 | `/subscribe` flow — EOA → Telegram binding UI | pending |
-| 12 | `/manage` flow — token-gated subscription manager | pending |
+| 9 | Nuxt web app scaffold + primitives + landing page | done |
+| 10 | `/check` flow — lookup + classification card | done |
+| 11 | `/subscribe` flow — EOA → Telegram binding UI | done |
+| 12 | `/manage` flow — token-gated subscription manager | **done** |
 | 13 | Registry browser | pending |
 | 14 | `docker-compose` + Caddy for self-host | pending |
 | 15 | Docs (governance, threat model, operator runbook) | pending |
 | 16 | CI workflows + Prometheus metrics | pending |
 
-Test counts at HEAD: **79 passing** (53 watcher + 0 indexer unit* + 26 app).
+Test counts at HEAD: **100 passing** (74 watcher + 0 indexer unit* + 26 app).
 *Indexer has unit tests for the delegation-designator parser; mainnet-fork tests land later.
 
 ---
@@ -218,8 +218,8 @@ Cost note: the block handler does one extra `eth_getBlockByNumber` per block (~7
 
 Runs three in-process subsystems sharing one Postgres instance:
 
-- **Telegram bot** (Telegraf, long polling) — commands `/start c_<code>`, `/help`, `/list`, `/remove <addr>`.
-- **HTTP API** (Hono) — `GET /health`, `POST /confirmations`.
+- **Telegram bot** (Telegraf, long polling) — commands `/start c_<code>`, `/help`, `/list`, `/remove <addr>`, `/manage`.
+- **HTTP API** (Hono) — `GET /health`, `POST /confirmations`, `POST /check`, `GET /manage/:token`, `POST /manage/:token/remove`.
 - **Alert dispatcher** — ~5s poll loop (±10% jitter) that reads the indexer's `delegation_event` table, classifies, fans out to Telegram, advances a singleton cursor. Transient failures halt and retry; permanent failures (`403`, `chat not found`) log and advance.
 
 Retention sweep runs hourly in the same loop and deletes `alerts_sent` rows older than `ALERT_RETENTION_DAYS` in bounded batches.
@@ -228,36 +228,29 @@ Five tables: `subscriptions`, `pending_confirmations`, `alerts_sent`, `manage_to
 
 ### `app/`
 
-Nuxt 3.21 SSR app. Step 9 deliverables:
+Nuxt 3.21 SSR app. Shipped through step 12:
 
 - Design tokens (`assets/css/tokens.css`) — warm minimal palette, spacing scale, type scale, iconography sizes (`--icon-inline: 14px`, `--icon-card: 20px`, `--icon-hero: 32px`).
 - Reset + baseline (`reset.css`, `base.css`).
 - Primitives with `G` prefix: `GButton`, `GInput`, `GCard`, `GBadge`, `GAddress`, `GCodeBlock`.
   - Under `exactOptionalPropertyTypes: true` the primitives spread optional attributes via `v-bind="attrs"` so undefined values are omitted from the DOM rather than bound literally.
-- `useWatcherApi` composable wrapping `$fetch`, with an exported pure `mapError(err)` that translates watcher error codes to `WatcherApiError`, a typed discriminated union.
+- `useWatcherApi` composable wrapping `$fetch`, with an exported pure `mapError(err)` that translates watcher error codes to `WatcherApiError`, a typed discriminated union. Covers `/confirmations`, `/check`, and both `/manage/:token` endpoints.
 - EN-only i18n (`i18n/en.ts`, `i18n/index.ts`) — flat keys, `t(key, vars)`, shape-compatible with a future i18n library.
-- Landing page (`pages/index.vue`): hero + how + why sections. Stub pages for `/check`, `/subscribe`, `/registry` so the nav never 404s before those flows land.
+- Pages:
+  - `pages/index.vue` — landing (hero + how + why).
+  - `pages/check.vue` — input → `POST /check`, renders classification card with `GBadge` + `GAddress`, surfaces classification source (registry / static / unknown), CTA links to subscribe.
+  - `pages/subscribe.vue` — input → `POST /confirmations`, pre-fills from `?eoa=…`, renders Telegram deep-link CTA with live countdown to `expiresAt`, copy-code fallback.
+  - `pages/manage/[token].vue` — lists the chat's confirmed EOAs via `GET /manage/:token` and removes them via `POST /manage/:token/remove`, with per-row remove state and revoked-token recovery.
+  - `pages/registry.vue` — stub; lands in step 13.
 - Sticky header + footer layout with monospace brand mark.
 
 26 tests across 6 files (component primitives + composable + i18n), running on happy-dom.
 
 ---
 
-## Roadmap (steps 10-16)
+## Roadmap (steps 13-16)
 
-Rough notes to help pick up where step 9 left off.
-
-### Step 10 — `/check` flow
-
-`app/pages/check.vue`. Input an EOA, call `POST /check` on the watcher (new endpoint), render a classification card using `GBadge` + `GAddress` + a short explanation pulled from i18n. Empty state + error states (invalid EOA, network, unknown). Copy-to-clipboard for the address. Likely a minor watcher change: add `POST /check` that returns `{ eoa, classification, target, source }` — no persistence.
-
-### Step 11 — `/subscribe` flow
-
-`app/pages/subscribe.vue`. Takes an EOA, calls `POST /confirmations`, renders the returned `t.me` deep-link as a big CTA with a countdown on `expiresAt`. Include a Telegram icon, copy-code fallback. Polling is not needed — user clicks the link and the bot handles the rest.
-
-### Step 12 — `/manage` flow
-
-`/manage/<opaqueToken>` (server-rendered, token-gated). Lists the chat's confirmed EOAs, lets the user remove any of them. Tokens live in `manage_tokens`; the bot issues one on `/manage` command. Rate-limit server-side. Token must be opaque (UUIDv4 or base62), never leak the chat ID.
+Rough notes to help pick up where step 12 left off.
 
 ### Step 13 — Registry browser
 
