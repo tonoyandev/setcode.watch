@@ -43,6 +43,17 @@ export const delegationEvent = pgTable('delegation_event', {
   txHash: ponderHex('txHash').notNull(),
 });
 
+// Current delegation state per (eoa, chainId). Written by the indexer's
+// block-scanner handler. A null `currentTarget` means the EOA revoked its
+// delegation. Rows are only upserted after we've seen the EOA delegate at
+// least once — absence means "never delegated in the indexed window".
+export const delegationState = pgTable('delegation_state', {
+  eoa: ponderHex('eoa').notNull(),
+  chainId: integer('chainId').notNull(),
+  currentTarget: ponderHex('currentTarget'),
+  lastUpdated: bigint('lastUpdated', { mode: 'bigint' }).notNull(),
+});
+
 export const registryClassificationState = pgTable('registry_classification_state', {
   target: ponderHex('target').primaryKey(),
   current: ponderClassification('current').notNull(),

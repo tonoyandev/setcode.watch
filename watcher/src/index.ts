@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server';
+import { CHAIN_ID_MAINNET } from '@setcode/shared/constants';
 import { createBot } from './bot/index.js';
 import { createDatabase } from './db/client.js';
 import { startDispatcherLoop } from './dispatcher/loop.js';
@@ -16,6 +17,7 @@ import {
   retentionSweepBatchSize,
   retentionSweepIntervalMs,
 } from './lib/env.js';
+import { createCheckService } from './services/check.js';
 import { createClassificationService } from './services/classification.js';
 import { createConfirmationsService } from './services/confirmations.js';
 import { createDispatcherService } from './services/dispatcher.js';
@@ -32,9 +34,18 @@ async function main() {
   });
 
   const bot = createBot({ token, service });
-  const app = createHttpApp({ service, botUsername, corsOrigins: corsOrigins() });
 
   const classification = createClassificationService(db);
+  const checkService = createCheckService(db, {
+    chainId: CHAIN_ID_MAINNET,
+    classification,
+  });
+  const app = createHttpApp({
+    service,
+    checkService,
+    botUsername,
+    corsOrigins: corsOrigins(),
+  });
   const telegram = createTelegramClient(token);
   const dispatcher = createDispatcherService(
     { db, telegram, classification },

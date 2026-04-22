@@ -8,6 +8,20 @@ export interface CreateConfirmationResponse {
   expiresAt: string;
 }
 
+export type Classification = 'verified' | 'unknown' | 'malicious';
+export type CheckSource = 'registry' | 'static' | 'unknown';
+
+// Response shape for watcher's POST /check endpoint. Mirror if server.ts
+// changes.
+export interface CheckResponse {
+  eoa: Address;
+  chainId: number;
+  currentTarget: Address | null;
+  classification: Classification;
+  source: CheckSource;
+  lastUpdated: number | null;
+}
+
 // Error shape for the watcher API. `kind` matches the error strings the
 // watcher returns so UI can branch on a stable enum rather than regex-match
 // human-readable text.
@@ -27,6 +41,7 @@ export class WatcherApiException extends Error {
 
 interface WatcherApiClient {
   createConfirmation(eoa: Address): Promise<CreateConfirmationResponse>;
+  check(eoa: Address): Promise<CheckResponse>;
 }
 
 // Thin wrapper over the watcher HTTP API. Uses Nuxt's ofetch under the hood
@@ -50,7 +65,19 @@ export function useWatcherApi(): WatcherApiClient {
     }
   }
 
-  return { createConfirmation };
+  async function check(eoa: Address): Promise<CheckResponse> {
+    try {
+      return await $fetch<CheckResponse>('/check', {
+        baseURL: baseUrl,
+        method: 'POST',
+        body: { eoa },
+      });
+    } catch (err: unknown) {
+      throw new WatcherApiException(mapError(err));
+    }
+  }
+
+  return { createConfirmation, check };
 }
 
 // Exported for unit tests. Keeping this as a pure function lets us verify the

@@ -50,6 +50,27 @@ export const en = {
     'Flagged as malicious by the registry or an on-chain downgrade.',
 
   // --------------------------------------------------------------------
+  // Check page
+  // --------------------------------------------------------------------
+  'check.title': 'Check an address',
+  'check.intro':
+    'Paste any Ethereum EOA. We will return its current EIP-7702 delegation target, if any, and the classification from our registry.',
+  'check.input.label': 'Address',
+  'check.input.placeholder': '0x…',
+  'check.submit': 'Check',
+  'check.submitting': 'Checking…',
+  'check.reset': 'Check another',
+
+  'check.result.title': 'Result',
+  'check.result.delegatesTo': 'Delegates to',
+  'check.result.noDelegation': 'This address has no active EIP-7702 delegation.',
+  'check.result.lastUpdated': 'Last updated',
+  'check.result.source.registry': 'Match from the on-chain SetCodeRegistry.',
+  'check.result.source.static': 'Match from the committed static registry.',
+  'check.result.source.unknown': 'No match in either registry — treat with caution.',
+  'check.result.subscribeCta': 'Subscribe to alerts for this address',
+
+  // --------------------------------------------------------------------
   // Shared errors
   // --------------------------------------------------------------------
   'error.network': 'Could not reach the service. Check your connection and try again.',

@@ -32,6 +32,14 @@ export const PONDER_FIXTURE_SQL = `
     "channelHash" bytea,
     "updatedAt" bigint NOT NULL
   );
+
+  CREATE TABLE delegation_state (
+    eoa bytea NOT NULL,
+    "chainId" integer NOT NULL,
+    "currentTarget" bytea,
+    "lastUpdated" bigint NOT NULL,
+    PRIMARY KEY (eoa, "chainId")
+  );
 `;
 
 export async function installPonderFixture(pg: PGlite): Promise<void> {
@@ -75,6 +83,30 @@ export async function insertDelegationEvent(
       input.blockNumber.toString(),
       input.timestamp.toString(),
       hexToBytes(input.txHash),
+    ],
+  );
+}
+
+export async function upsertDelegationState(
+  pg: PGlite,
+  input: {
+    eoa: string;
+    chainId: number;
+    currentTarget: string | null;
+    lastUpdated: bigint;
+  },
+): Promise<void> {
+  await pg.query(
+    `INSERT INTO delegation_state (eoa, "chainId", "currentTarget", "lastUpdated")
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (eoa, "chainId") DO UPDATE SET
+       "currentTarget" = EXCLUDED."currentTarget",
+       "lastUpdated" = EXCLUDED."lastUpdated"`,
+    [
+      hexToBytes(input.eoa),
+      input.chainId,
+      input.currentTarget === null ? null : hexToBytes(input.currentTarget),
+      input.lastUpdated.toString(),
     ],
   );
 }

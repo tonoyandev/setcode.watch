@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHttpApp } from '../http/server.js';
+import type { CheckService } from '../services/check.js';
 import type { ConfirmationsService } from '../services/confirmations.js';
 
-function makeApp(overrides: Partial<ConfirmationsService> = {}) {
+function makeApp(
+  overrides: Partial<ConfirmationsService> = {},
+  checkOverrides: Partial<CheckService> = {},
+) {
   const service = {
     createPending: vi.fn(),
     confirm: vi.fn(),
@@ -12,12 +16,18 @@ function makeApp(overrides: Partial<ConfirmationsService> = {}) {
     ...overrides,
   } as unknown as ConfirmationsService;
 
+  const checkService = {
+    check: vi.fn(),
+    ...checkOverrides,
+  } as unknown as CheckService;
+
   const app = createHttpApp({
     service,
+    checkService,
     botUsername: 'SetCodeBot',
     corsOrigins: ['http://localhost:3000'],
   });
-  return { app, service };
+  return { app, service, checkService };
 }
 
 describe('HTTP API', () => {
@@ -87,5 +97,62 @@ describe('HTTP API', () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'invalid_eoa' });
     expect(createPending).not.toHaveBeenCalled();
+  });
+
+  it('POST /check returns a classification result for a valid EOA', async () => {
+    const check = vi.fn().mockResolvedValue({
+      eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      chainId: 1,
+      currentTarget: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      classification: 'malicious',
+      source: 'registry',
+      lastUpdated: 1700000000,
+    });
+    const { app } = makeApp({}, { check });
+    const res = await app.request('/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      chainId: 1,
+      currentTarget: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      classification: 'malicious',
+      source: 'registry',
+      lastUpdated: 1700000000,
+    });
+    expect(check).toHaveBeenCalledWith('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+  });
+
+  it('POST /check rejects invalid JSON, invalid body, and bad EOA shape', async () => {
+    const check = vi.fn();
+    const { app } = makeApp({}, { check });
+
+    const badJson = await app.request('/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{bad',
+    });
+    expect(badJson.status).toBe(400);
+    expect(await badJson.json()).toEqual({ error: 'invalid_json' });
+
+    const missing = await app.request('/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(missing.status).toBe(400);
+    expect(await missing.json()).toEqual({ error: 'invalid_body' });
+
+    const badEoa = await app.request('/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eoa: 'nope' }),
+    });
+    expect(badEoa.status).toBe(400);
+    expect(await badEoa.json()).toEqual({ error: 'invalid_eoa' });
+    expect(check).not.toHaveBeenCalled();
   });
 });
