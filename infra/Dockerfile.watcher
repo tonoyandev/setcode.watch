@@ -1,0 +1,56 @@
+# Watcher image — Telegraf bot + Hono HTTP API + dispatcher loop.
+#
+# The watcher runs TypeScript directly via `tsx` (no bundler step).
+# `@setcode/shared` ships raw TS via package exports, and tsx resolves it at
+# startup. This keeps the build honest to the source tree and dodges an
+# entire class of bundling footguns during MVP.
+#
+# Two stages:
+#   1) deps    — run `pnpm deploy --filter @setcode/watcher /deploy` against
+#                the full workspace so workspace:* links are inlined into a
+#                self-contained package under /deploy.
+#   2) runner  — copy /deploy into a slim node:22 image, drop privileges,
+#                run `pnpm start` (which is `tsx src/index.ts`).
+
+# ---------- deps ----------
+FROM node:22-alpine AS deps
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+WORKDIR /repo
+
+# Copy the minimal set needed for pnpm to resolve the workspace graph.
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY shared/package.json   shared/package.json
+COPY watcher/package.json  watcher/package.json
+COPY indexer/package.json  indexer/package.json
+COPY app/package.json      app/package.json
+COPY contracts/package.json contracts/package.json
+
+# Full install is required so `pnpm deploy` can resolve workspace:* links.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
+    pnpm config set store-dir /pnpm-store && \
+    pnpm install --frozen-lockfile
+
+# Bring in the sources the deploy step needs.
+COPY shared  shared
+COPY watcher watcher
+
+# `pnpm deploy` materialises workspace:* deps into node_modules under /deploy.
+RUN pnpm deploy --filter=@setcode/watcher --prod --legacy /deploy
+
+# ---------- runner ----------
+FROM node:22-alpine AS runner
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+# Non-root, tini-less; Node handles PID 1 signals fine on Alpine 3.19+.
+RUN addgroup -S app && adduser -S app -G app
+WORKDIR /app
+
+COPY --from=deps --chown=app:app /deploy ./
+USER app
+
+ENV NODE_ENV=production
+EXPOSE 8787
+
+# `pnpm start` → `tsx src/index.ts`. `pnpm db:migrate` is the other entrypoint
+# the migrate sidecar overrides via `command:`.
+CMD ["pnpm", "start"]

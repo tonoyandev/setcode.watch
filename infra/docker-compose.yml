@@ -1,0 +1,164 @@
+# SetCode.watch self-host compose file.
+#
+# Topology (single host, one Docker network):
+#
+#   Internet --> caddy (80/443) --> app (3000) --> |
+#                              \--> watcher (8787)-+--> postgres (5432)
+#                                   indexer -------+
+#
+# Only `caddy` publishes ports to the host. Everything else talks over the
+# internal Docker network. Caddy path-routes `/api/*` → watcher and `/*` →
+# Nuxt app so the browser sees a single origin and no CORS preflight.
+#
+# Bring-up: read docs/OPERATIONS.md, fill infra/.env, then from repo root:
+#   docker compose -f infra/docker-compose.yml --env-file infra/.env up -d
+#
+# Migrations run as a one-shot sidecar (`watcher-migrate`) on every `up`;
+# it exits 0 after applying new migrations and blocks the long-running
+# `watcher` service via `depends_on.condition: service_completed_successfully`.
+# Ponder owns its own schema — the indexer service applies it on first boot.
+
+name: setcode-watch
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-setcode}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-setcode}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-setcode} -d ${POSTGRES_DB:-setcode}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - internal
+
+  watcher-migrate:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.watcher
+    restart: "no"
+    command: ["pnpm", "db:migrate"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-setcode}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-setcode}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
+  watcher:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.watcher
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-setcode}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-setcode}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:?TELEGRAM_BOT_USERNAME is required}
+      WATCHER_HTTP_PORT: "8787"
+      # Caddy reverse-proxies browser traffic on-origin, so CORS can be empty.
+      # Keep the domain listed anyway for anyone hitting the API directly.
+      WATCHER_CORS_ORIGIN: https://${DOMAIN:?DOMAIN is required}
+      WATCHER_WEB_BASE_URL: https://${DOMAIN}
+      CONFIRMATION_TTL_SECONDS: ${CONFIRMATION_TTL_SECONDS:-300}
+      ALERT_RETENTION_DAYS: ${ALERT_RETENTION_DAYS:-90}
+      MAX_SUBSCRIPTIONS_PER_CHAT: ${MAX_SUBSCRIPTIONS_PER_CHAT:-10}
+      WATCHER_POLL_INTERVAL_MS: ${WATCHER_POLL_INTERVAL_MS:-5000}
+      WATCHER_DISPATCH_BATCH_SIZE: ${WATCHER_DISPATCH_BATCH_SIZE:-100}
+      WATCHER_RETENTION_SWEEP_INTERVAL_MS: ${WATCHER_RETENTION_SWEEP_INTERVAL_MS:-3600000}
+      WATCHER_RETENTION_SWEEP_BATCH_SIZE: ${WATCHER_RETENTION_SWEEP_BATCH_SIZE:-10000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      watcher-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks:
+      - internal
+
+  indexer:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.indexer
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-setcode}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-setcode}
+      ETH_RPC_URL: ${ETH_RPC_URL:?ETH_RPC_URL is required}
+      ETH_RPC_FALLBACK_1: ${ETH_RPC_FALLBACK_1:-}
+      ETH_RPC_FALLBACK_2: ${ETH_RPC_FALLBACK_2:-}
+      PONDER_START_BLOCK: ${PONDER_START_BLOCK:?PONDER_START_BLOCK is required}
+      DELEGATION_CANARY_ADDRESS: ${DELEGATION_CANARY_ADDRESS:-}
+      SETCODE_REGISTRY_ADDRESS: ${SETCODE_REGISTRY_ADDRESS:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
+  app:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.app
+      args:
+        # Baked into the Nuxt bundle at build time. Browser requests go to
+        # /api which Caddy proxies on-origin to the watcher.
+        NUXT_PUBLIC_WATCHER_API_URL: /api
+        NUXT_PUBLIC_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+    restart: unless-stopped
+    environment:
+      NITRO_HOST: 0.0.0.0
+      NITRO_PORT: "3000"
+      # These are also read at runtime by Nuxt for SSR. Keep them in sync
+      # with the build-time ARGs above.
+      NUXT_PUBLIC_WATCHER_API_URL: /api
+      NUXT_PUBLIC_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+    depends_on:
+      watcher:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+      - watcher
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

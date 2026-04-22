@@ -1,0 +1,64 @@
+# SetCode.watch reverse proxy.
+#
+# One TLS cert for {$DOMAIN}. Caddy terminates HTTPS and path-routes on the
+# same origin so the browser never hits a second hostname (no CORS preflight):
+#
+#   GET https://{$DOMAIN}/api/check    -> watcher:8787/check
+#   GET https://{$DOMAIN}/             -> app:3000/
+#
+# `handle_path` strips the `/api` prefix before forwarding, so the watcher's
+# Hono routes keep their natural shape (/check, /confirmations, /manage/:token,
+# /registry, /health).
+#
+# ACME email comes from $ACME_EMAIL so Let's Encrypt has a contact for
+# expiration / policy notices.
+
+{
+	email {$ACME_EMAIL}
+	# servers { protocols h1 h2 h3 }
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Hardening headers. HSTS is on a 2-year max-age with preload-ready flags;
+	# flip `includeSubDomains` off if you ever host something on a subdomain
+	# that should not be forced HTTPS.
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+
+	# API: strip /api and forward to the watcher. `handle_path` (vs `handle`)
+	# is what removes the prefix; the watcher sees /check, /confirmations, …
+	handle_path /api/* {
+		reverse_proxy watcher:8787 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host  {host}
+			header_up X-Real-IP         {remote_host}
+		}
+	}
+
+	# Everything else: Nuxt SSR.
+	handle {
+		reverse_proxy app:3000 {
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host  {host}
+			header_up X-Real-IP         {remote_host}
+		}
+	}
+
+	handle_errors {
+		respond "{err.status_code} {err.status_text}"
+	}
+
+	log {
+		output stdout
+		format console
+		level  INFO
+	}
+}

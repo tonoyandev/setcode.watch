@@ -19,7 +19,7 @@ No custody, no private keys, no transaction signing. The service only watches.
 
 ## Status
 
-**Pre-MVP, mid-build.** 13 of 16 bootstrap steps complete; step 13 (registry browser) just shipped.
+**Pre-MVP, mid-build.** 14 of 16 bootstrap steps complete; step 14 (deploy surface) just shipped.
 
 | Step | Area | State |
 | ---- | ---- | ----- |
@@ -36,7 +36,7 @@ No custody, no private keys, no transaction signing. The service only watches.
 | 11 | `/subscribe` flow — EOA → Telegram binding UI | done |
 | 12 | `/manage` flow — token-gated subscription manager | **done** |
 | 13 | Registry browser | **done** |
-| 14 | `docker-compose` + Caddy for self-host | pending |
+| 14 | `docker-compose` + Caddy for self-host | **done** |
 | 15 | Docs (governance, threat model, operator runbook) | pending |
 | 16 | CI workflows + Prometheus metrics | pending |
 
@@ -187,6 +187,8 @@ pnpm lint:fix      # biome check --write
 
 Environment variables are documented per-package in `*/.env.example` files. None of them are checked into git.
 
+For self-hosting the whole stack (Postgres + indexer + watcher + app + Caddy in one `docker compose up`), see [`docs/OPERATIONS.md`](./docs/OPERATIONS.md) and [`infra/.env.example`](./infra/.env.example).
+
 ---
 
 ## Directory deep-dive
@@ -248,16 +250,9 @@ Nuxt 3.21 SSR app. Shipped through step 13:
 
 ---
 
-## Roadmap (steps 14-16)
+## Roadmap (steps 15-16)
 
-Rough notes to help pick up where step 13 left off.
-
-### Step 14 — Deploy surface
-
-- `docker-compose.yml` — Postgres, indexer, watcher, app, Caddy (TLS).
-- Caddyfile with auto-HTTPS.
-- `Dockerfile`s per service (multi-stage, non-root, pinned base images).
-- Runbook for first boot (`docs/OPERATIONS.md`).
+Rough notes to help pick up where step 14 left off.
 
 ### Step 15 — Docs
 
