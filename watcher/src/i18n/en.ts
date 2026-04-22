@@ -33,6 +33,16 @@ export const en = {
     '<b>{title}</b>\n\nAddress: <code>{eoa}</code>\nOld target: {oldTarget}\nNew target: {newTarget}\nTx: {txLink}',
   'alert.target.none': '<i>(none)</i>',
   'alert.target.value': '<code>{target}</code> — {classification}',
+  // Watch flow: `/start w_<addr>` from the web app's Watch CTA. One-off
+  // classification peek; no subscription is created. Nudges the user back
+  // to the web app for persistent alerts.
+  'watch.reply':
+    'Current status for {eoa}:\n{target}\nClassification: {classification}\n\nWant alerts every time this address is re-delegated? Paste it on https://setcode.watch and tap Subscribe.',
+  'watch.noDelegation': 'No active EIP-7702 delegation.',
+  'watch.delegatesTo': 'Delegates to {target}',
+  'watch.class.verified': 'Verified (reviewed + in the registry)',
+  'watch.class.unknown': 'Unknown (not yet classified — treat with caution)',
+  'watch.class.malicious': 'Malicious (flagged by the registry)',
 } as const;
 
 export type MessageKey = keyof typeof en;

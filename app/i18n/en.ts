@@ -1,26 +1,69 @@
 // Single-locale catalog for the Nuxt app. Same shape as watcher/src/i18n/en.ts
-// so the step 14 i18n refactor can swap a proper library in behind the `t()`
-// helper without touching callers. Keys are dot-namespaced by screen.
+// so a future i18n library can swap in behind the `t()` helper without
+// touching callers. Keys are dot-namespaced by screen.
 
 export const en = {
   // --------------------------------------------------------------------
   // Global nav + footer
   // --------------------------------------------------------------------
-  'nav.check': 'Check',
-  'nav.subscribe': 'Subscribe',
   'nav.registry': 'Registry',
   'nav.docs': 'Docs',
   'footer.tagline': 'Open-source monitoring for EIP-7702 delegated accounts.',
   'footer.github': 'GitHub',
 
   // --------------------------------------------------------------------
-  // Landing page
+  // Wallet connect chip
+  // --------------------------------------------------------------------
+  'wallet.connect': 'Connect Wallet',
+  'wallet.connected': 'Connected',
+  'wallet.copy': 'Copy',
+  'wallet.copied': 'Copied',
+  'wallet.disconnect': 'Disconnect',
+
+  // --------------------------------------------------------------------
+  // Landing / home page — the unified hub for lookup + subscribe + watch
   // --------------------------------------------------------------------
   'landing.hero.headline': 'Know when your wallet gets delegated.',
   'landing.hero.subhead':
-    'Continuous monitoring for EIP-7702 authorizations. Verified, unknown, or malicious — get alerted before damage spreads.',
-  'landing.hero.primaryCta': 'Check an address',
-  'landing.hero.secondaryCta': 'Subscribe for alerts',
+    'Paste an address or connect your wallet. Get the current EIP-7702 delegation, its classification, and one-tap subscribe + watch in Telegram.',
+
+  'home.lookup.label': 'Ethereum address',
+  'home.lookup.placeholder': '0x… or click Connect Wallet',
+  'home.lookup.submit': 'Look up delegation',
+  'home.lookup.checking': 'Checking…',
+  'home.lookup.reset': 'Clear',
+  'home.lookup.hint':
+    'Tip: connect a wallet to auto-fill this field and watch for account switches.',
+  'home.lookup.autofilled': 'Filled from your connected wallet',
+
+  'home.result.title': 'Current delegation',
+  'home.result.eoa': 'EOA',
+  'home.result.delegatesTo': 'Delegates to',
+  'home.result.noDelegation': 'This address has no active EIP-7702 delegation.',
+  'home.result.lastUpdated': 'Last updated',
+  'home.result.source.registry': 'Match from the on-chain SetCodeRegistry.',
+  'home.result.source.static': 'Match from the committed static registry.',
+  'home.result.source.unknown': 'No match in either registry — treat with caution.',
+
+  'home.cta.subscribe': 'Subscribe',
+  'home.cta.subscribe.tooltip':
+    'Get a Telegram alert every time this address is delegated or the target changes. Requires a one-time confirmation in Telegram; you can unsubscribe any time with /remove.',
+  'home.cta.watch': 'Watch in Telegram',
+  'home.cta.watch.tooltip':
+    'Open the bot and see the current classification for this address — no subscription, no binding. Good for a one-off check or sharing a link.',
+
+  'home.confirm.title': 'Almost there — confirm in Telegram',
+  'home.confirm.body':
+    'Tap the button to open a pre-filled chat with the bot. The chat you confirm from becomes the subscriber for this address.',
+  'home.confirm.cta': 'Open Telegram',
+  'home.confirm.copyCode': 'Copy code',
+  'home.confirm.copied': 'Copied',
+  'home.confirm.expiresIn': 'Expires in {seconds}s',
+  'home.confirm.expired': 'This link has expired. Tap Subscribe again to get a fresh one.',
+  'home.confirm.fallback':
+    'If the button does not work, send this to @{bot} as a message starting with /start.',
+
+  'home.subscribe.error': 'Could not create a confirmation link. Try again in a moment.',
 
   'landing.how.title': 'How it works',
   'landing.how.step1.title': '1. Ponder indexes EIP-7702 delegations',
@@ -50,60 +93,13 @@ export const en = {
     'Flagged as malicious by the registry or an on-chain downgrade.',
 
   // --------------------------------------------------------------------
-  // Check page
-  // --------------------------------------------------------------------
-  'check.title': 'Check an address',
-  'check.intro':
-    'Paste any Ethereum EOA. We will return its current EIP-7702 delegation target, if any, and the classification from our registry.',
-  'check.input.label': 'Address',
-  'check.input.placeholder': '0x…',
-  'check.submit': 'Check',
-  'check.submitting': 'Checking…',
-  'check.reset': 'Check another',
-
-  'check.result.title': 'Result',
-  'check.result.delegatesTo': 'Delegates to',
-  'check.result.noDelegation': 'This address has no active EIP-7702 delegation.',
-  'check.result.lastUpdated': 'Last updated',
-  'check.result.source.registry': 'Match from the on-chain SetCodeRegistry.',
-  'check.result.source.static': 'Match from the committed static registry.',
-  'check.result.source.unknown': 'No match in either registry — treat with caution.',
-  'check.result.subscribeCta': 'Subscribe to alerts for this address',
-
-  // --------------------------------------------------------------------
-  // Subscribe page
-  // --------------------------------------------------------------------
-  'subscribe.title': 'Subscribe to alerts',
-  'subscribe.intro':
-    'Paste an EOA and confirm it from Telegram. The chat you confirm from starts receiving a note every time this address is delegated or revoked.',
-  'subscribe.input.label': 'Address to watch',
-  'subscribe.input.placeholder': '0x…',
-  'subscribe.submit': 'Generate confirmation link',
-  'subscribe.submitting': 'Preparing link…',
-  'subscribe.reset': 'Start over',
-
-  'subscribe.result.title': 'Open this link in Telegram',
-  'subscribe.result.body':
-    'Tap the button to open a pre-filled conversation with the bot. The chat you confirm from becomes the subscriber for this address.',
-  'subscribe.result.cta': 'Open in Telegram',
-  'subscribe.result.copyCode': 'Copy code',
-  'subscribe.result.copied': 'Copied',
-  'subscribe.result.expiresIn': 'Expires in {seconds}s',
-  'subscribe.result.expired': 'This link has expired. Generate a new one.',
-  'subscribe.result.fallback':
-    'If the button does not work, send this code to @{bot} as a message starting with /start.',
-
-  'subscribe.error.cannotSendTelegram':
-    'We could not create a confirmation link. Try again in a moment.',
-
-  // --------------------------------------------------------------------
   // Manage page (token-gated list + remove for a chat's subscriptions)
   // --------------------------------------------------------------------
   'manage.title': 'Manage your subscriptions',
   'manage.intro':
     'This page is authorised by the token in the URL your bot handed you. It lists the confirmed EOAs for that chat and lets you unsubscribe.',
   'manage.loading': 'Loading your subscriptions…',
-  'manage.empty': 'No confirmed subscriptions for this chat. Add one from the subscribe page.',
+  'manage.empty': 'No confirmed subscriptions for this chat. Add one from the home page.',
   'manage.count': 'Watching {count} address(es):',
   'manage.confirmedAt': 'Confirmed {when}',
   'manage.remove': 'Remove',

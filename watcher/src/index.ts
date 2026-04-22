@@ -38,13 +38,13 @@ async function main() {
 
   const manageService = createManageService(db, { webBaseUrl: webBaseUrl() });
 
-  const bot = createBot({ token, service, manage: manageService });
-
   const classification = createClassificationService(db);
   const checkService = createCheckService(db, {
     chainId: CHAIN_ID_MAINNET,
     classification,
   });
+
+  const bot = createBot({ token, service, manage: manageService, check: checkService });
   const registryService = createRegistryService(db);
   const app = createHttpApp({
     service,

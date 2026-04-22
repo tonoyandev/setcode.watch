@@ -15,12 +15,19 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@reown/appkit": "^1.8.19",
+    "@reown/appkit-adapter-wagmi": "^1.8.19",
     "@setcode/shared": "workspace:*",
+    "@tanstack/vue-query": "^5.99.2",
+    "@wagmi/connectors": "^5.11",
+    "@wagmi/core": "^2.22",
+    "@wagmi/vue": "^0.2",
     "lucide-vue-next": "0.471.0",
     "nuxt": "3.21.2",
     "viem": "^2.21.45",
     "vue": "3.5.13",
-    "vue-router": "4.5.0"
+    "vue-router": "4.5.0",
+    "wagmi": "^2.19"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",

@@ -32,6 +32,18 @@ export default defineNuxtConfig({
       // NUXT_PUBLIC_WATCHER_API_URL — see app/.env.example.
       watcherApiUrl: 'http://localhost:8787',
       botUsername: 'setcode_watch_bot',
+      // Reown (formerly WalletConnect) project ID. Create one at
+      // https://cloud.reown.com — it's free for open-source projects.
+      // Without it the Connect Wallet button falls back to injected-only
+      // (MetaMask / Rabby / browser wallets) and WalletConnect v2 is off.
+      reownProjectId: '',
+    },
+  },
+  // Vite/Rollup: force CJS deep-imports used by wagmi/viem internals to be
+  // treated as ESM so SSR doesn't choke on `require`.
+  vite: {
+    ssr: {
+      noExternal: ['@reown/appkit', '@reown/appkit-adapter-wagmi', '@wagmi/vue', '@wagmi/core'],
     },
   },
   nitro: {

@@ -11,11 +11,12 @@ import { t } from '~/i18n';
           <span class="layout__brandDot">.</span>
           <span class="layout__brandTail">watch</span>
         </NuxtLink>
-        <nav class="layout__nav" aria-label="Primary">
-          <NuxtLink to="/check" class="layout__link">{{ t('nav.check') }}</NuxtLink>
-          <NuxtLink to="/subscribe" class="layout__link">{{ t('nav.subscribe') }}</NuxtLink>
-          <NuxtLink to="/registry" class="layout__link">{{ t('nav.registry') }}</NuxtLink>
-        </nav>
+        <div class="layout__right">
+          <nav class="layout__nav" aria-label="Primary">
+            <NuxtLink to="/registry" class="layout__link">{{ t('nav.registry') }}</NuxtLink>
+          </nav>
+          <GConnectButton />
+        </div>
       </div>
     </header>
 
@@ -80,6 +81,12 @@ import { t } from '~/i18n';
 
 .layout__brandTail {
   color: var(--color-ink-muted);
+}
+
+.layout__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
 }
 
 .layout__nav {

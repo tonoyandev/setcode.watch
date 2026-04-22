@@ -7,6 +7,7 @@ import {
   handleRemove,
   handleStart,
 } from '../bot/handlers.js';
+import type { CheckService } from '../services/check.js';
 import type { ConfirmationsService } from '../services/confirmations.js';
 import type { ManageService } from '../services/manage.js';
 
@@ -21,12 +22,28 @@ function makeService(overrides: Partial<ConfirmationsService>): ConfirmationsSer
   } as unknown as ConfirmationsService;
 }
 
+function makeCheck(overrides: Partial<CheckService> = {}): CheckService {
+  return {
+    check: vi.fn().mockResolvedValue({
+      eoa: ADDR,
+      chainId: 1,
+      currentTarget: null,
+      classification: 'unknown',
+      source: 'unknown',
+      lastUpdated: null,
+    }),
+    ...overrides,
+  } as unknown as CheckService;
+}
+
 const ADDR = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as Address;
+const TARGET = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as Address;
 
 describe('handleStart', () => {
   it('returns welcome text when no payload is given', async () => {
     const service = makeService({});
-    const { reply } = await handleStart(service, {
+    const check = makeCheck();
+    const { reply } = await handleStart(service, check, {
       payload: undefined,
       chatId: 1n,
       username: null,
@@ -34,10 +51,22 @@ describe('handleStart', () => {
     expect(reply).toMatch(/Welcome to SetCode.watch/);
   });
 
-  it('rejects a payload without the c_ prefix', async () => {
+  it('rejects an unknown-prefix payload', async () => {
     const service = makeService({});
-    const { reply } = await handleStart(service, {
+    const check = makeCheck();
+    const { reply } = await handleStart(service, check, {
       payload: 'random',
+      chatId: 1n,
+      username: null,
+    });
+    expect(reply).toMatch(/don't recognise that start parameter/);
+  });
+
+  it('rejects a c_ payload with the wrong body shape', async () => {
+    const service = makeService({});
+    const check = makeCheck();
+    const { reply } = await handleStart(service, check, {
+      payload: 'c_short',
       chatId: 1n,
       username: null,
     });
@@ -63,7 +92,8 @@ describe('handleStart', () => {
 
     for (let i = 0; i < results.length; i++) {
       const service = makeService({ confirm: vi.fn().mockResolvedValue(results[i]) });
-      const { reply } = await handleStart(service, {
+      const check = makeCheck();
+      const { reply } = await handleStart(service, check, {
         payload: code,
         chatId: 1n,
         username: 'alice',
@@ -77,6 +107,43 @@ describe('handleStart', () => {
         username: 'alice',
       });
     }
+  });
+
+  it('handles a w_ payload by running CheckService and rendering the reply', async () => {
+    const service = makeService({});
+    const check = makeCheck({
+      check: vi.fn().mockResolvedValue({
+        eoa: ADDR,
+        chainId: 1,
+        currentTarget: TARGET,
+        classification: 'malicious',
+        source: 'registry',
+        lastUpdated: 1000,
+      }),
+    });
+
+    const { reply } = await handleStart(service, check, {
+      payload: `w_${ADDR}`,
+      chatId: 1n,
+      username: null,
+    });
+
+    expect(check.check).toHaveBeenCalledWith(ADDR);
+    expect(reply).toMatch(new RegExp(ADDR));
+    expect(reply).toMatch(new RegExp(TARGET));
+    expect(reply).toMatch(/Malicious/);
+  });
+
+  it('rejects a malformed w_ payload', async () => {
+    const service = makeService({});
+    const check = makeCheck();
+    const { reply } = await handleStart(service, check, {
+      payload: 'w_not-an-address',
+      chatId: 1n,
+      username: null,
+    });
+    expect(reply).toMatch(/don't recognise that start parameter/);
+    expect(check.check).not.toHaveBeenCalled();
   });
 });
 
