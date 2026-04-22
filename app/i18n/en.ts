@@ -71,6 +71,32 @@ export const en = {
   'check.result.subscribeCta': 'Subscribe to alerts for this address',
 
   // --------------------------------------------------------------------
+  // Subscribe page
+  // --------------------------------------------------------------------
+  'subscribe.title': 'Subscribe to alerts',
+  'subscribe.intro':
+    'Paste an EOA and confirm it from Telegram. The chat you confirm from starts receiving a note every time this address is delegated or revoked.',
+  'subscribe.input.label': 'Address to watch',
+  'subscribe.input.placeholder': '0x…',
+  'subscribe.submit': 'Generate confirmation link',
+  'subscribe.submitting': 'Preparing link…',
+  'subscribe.reset': 'Start over',
+
+  'subscribe.result.title': 'Open this link in Telegram',
+  'subscribe.result.body':
+    'Tap the button to open a pre-filled conversation with the bot. The chat you confirm from becomes the subscriber for this address.',
+  'subscribe.result.cta': 'Open in Telegram',
+  'subscribe.result.copyCode': 'Copy code',
+  'subscribe.result.copied': 'Copied',
+  'subscribe.result.expiresIn': 'Expires in {seconds}s',
+  'subscribe.result.expired': 'This link has expired. Generate a new one.',
+  'subscribe.result.fallback':
+    'If the button does not work, send this code to @{bot} as a message starting with /start.',
+
+  'subscribe.error.cannotSendTelegram':
+    'We could not create a confirmation link. Try again in a moment.',
+
+  // --------------------------------------------------------------------
   // Shared errors
   // --------------------------------------------------------------------
   'error.network': 'Could not reach the service. Check your connection and try again.',
