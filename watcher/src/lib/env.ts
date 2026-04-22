@@ -73,3 +73,9 @@ export function retentionSweepIntervalMs(): number {
 export function retentionSweepBatchSize(): number {
   return optionalIntEnv('WATCHER_RETENTION_SWEEP_BATCH_SIZE', 10000);
 }
+
+// Canonical public origin of the Nuxt web app. Used to build /manage URLs
+// the bot hands to users. Falls back to localhost for dev ergonomics.
+export function webBaseUrl(): string {
+  return process.env.WATCHER_WEB_BASE_URL ?? 'http://localhost:3000';
+}

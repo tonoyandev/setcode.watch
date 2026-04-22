@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { createHttpApp } from '../http/server.js';
 import type { CheckService } from '../services/check.js';
 import type { ConfirmationsService } from '../services/confirmations.js';
+import type { ManageService } from '../services/manage.js';
 
 function makeApp(
   overrides: Partial<ConfirmationsService> = {},
   checkOverrides: Partial<CheckService> = {},
+  manageOverrides: Partial<ManageService> = {},
 ) {
   const service = {
     createPending: vi.fn(),
@@ -21,13 +23,23 @@ function makeApp(
     ...checkOverrides,
   } as unknown as CheckService;
 
+  const manageService = {
+    issue: vi.fn(),
+    resolve: vi.fn(),
+    listSubscriptions: vi.fn(),
+    removeSubscription: vi.fn(),
+    revoke: vi.fn(),
+    ...manageOverrides,
+  } as unknown as ManageService;
+
   const app = createHttpApp({
     service,
     checkService,
+    manageService,
     botUsername: 'SetCodeBot',
     corsOrigins: ['http://localhost:3000'],
   });
-  return { app, service, checkService };
+  return { app, service, checkService, manageService };
 }
 
 describe('HTTP API', () => {
@@ -124,6 +136,106 @@ describe('HTTP API', () => {
       lastUpdated: 1700000000,
     });
     expect(check).toHaveBeenCalledWith('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+  });
+
+  it('GET /manage/:token returns the chat subscriptions on happy path', async () => {
+    const listSubscriptions = vi.fn().mockResolvedValue({
+      kind: 'ok',
+      chatId: 42n,
+      subscriptions: [
+        {
+          eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          confirmedAt: new Date('2026-04-21T10:00:00Z'),
+        },
+      ],
+    });
+    const { app } = makeApp({}, {}, { listSubscriptions });
+    const res = await app.request('/manage/abcdefgh12345678');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      subscriptions: [
+        {
+          eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          confirmedAt: '2026-04-21T10:00:00.000Z',
+        },
+      ],
+    });
+    expect(listSubscriptions).toHaveBeenCalledWith('abcdefgh12345678');
+  });
+
+  it('GET /manage/:token rejects malformed tokens and surfaces not_found', async () => {
+    const listSubscriptions = vi.fn().mockResolvedValue({ kind: 'not_found' });
+    const { app } = makeApp({}, {}, { listSubscriptions });
+
+    const bad = await app.request('/manage/short');
+    expect(bad.status).toBe(400);
+    expect(await bad.json()).toEqual({ error: 'invalid_token' });
+    expect(listSubscriptions).not.toHaveBeenCalled();
+
+    const missing = await app.request('/manage/abcdefgh12345678');
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: 'not_found' });
+  });
+
+  it('POST /manage/:token/remove deletes an EOA for the chat', async () => {
+    const removeSubscription = vi.fn().mockResolvedValue({ kind: 'ok', removed: true });
+    const { app } = makeApp({}, {}, { removeSubscription });
+    const res = await app.request('/manage/abcdefgh12345678/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ removed: true });
+    expect(removeSubscription).toHaveBeenCalledWith(
+      'abcdefgh12345678',
+      '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    );
+  });
+
+  it('POST /manage/:token/remove rejects bad input and surfaces not_found', async () => {
+    const removeSubscription = vi.fn().mockResolvedValue({ kind: 'not_found' });
+    const { app } = makeApp({}, {}, { removeSubscription });
+
+    const badToken = await app.request('/manage/short/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }),
+    });
+    expect(badToken.status).toBe(400);
+    expect(await badToken.json()).toEqual({ error: 'invalid_token' });
+
+    const badJson = await app.request('/manage/abcdefgh12345678/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{bad',
+    });
+    expect(badJson.status).toBe(400);
+    expect(await badJson.json()).toEqual({ error: 'invalid_json' });
+
+    const missing = await app.request('/manage/abcdefgh12345678/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(missing.status).toBe(400);
+    expect(await missing.json()).toEqual({ error: 'invalid_body' });
+
+    const badEoa = await app.request('/manage/abcdefgh12345678/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eoa: 'nope' }),
+    });
+    expect(badEoa.status).toBe(400);
+    expect(await badEoa.json()).toEqual({ error: 'invalid_eoa' });
+
+    const notFound = await app.request('/manage/abcdefgh12345678/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }),
+    });
+    expect(notFound.status).toBe(404);
+    expect(await notFound.json()).toEqual({ error: 'not_found' });
   });
 
   it('POST /check rejects invalid JSON, invalid body, and bad EOA shape', async () => {

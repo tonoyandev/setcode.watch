@@ -12,6 +12,12 @@ describe('mapError', () => {
     expect(mapError({ status: 400, data: { error: 'invalid_json' } })).toEqual({
       kind: 'invalid_json',
     });
+    expect(mapError({ status: 400, data: { error: 'invalid_token' } })).toEqual({
+      kind: 'invalid_token',
+    });
+    expect(mapError({ status: 404, data: { error: 'not_found' } })).toEqual({
+      kind: 'not_found',
+    });
   });
 
   it('falls back to "network" when the error has no status', () => {

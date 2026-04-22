@@ -3,6 +3,7 @@ import { t } from '../i18n/index.js';
 import { normaliseEoa } from '../lib/address.js';
 import { CONFIRMATION_CODE_PREFIX, isConfirmationCode } from '../lib/code.js';
 import type { ConfirmationsService } from '../services/confirmations.js';
+import type { ManageService } from '../services/manage.js';
 
 export interface StartInput {
   payload: string | undefined;
@@ -62,6 +63,14 @@ export async function handleList(
   const header = t('list.header', { count: rows.length });
   const body = rows.map((r) => `• ${r.eoa}`).join('\n');
   return { reply: `${header}\n${body}` };
+}
+
+export async function handleManage(
+  service: ManageService,
+  input: CommandInput,
+): Promise<HandlerReply> {
+  const { url } = await service.issue(input.chatId);
+  return { reply: `${t('manage.revoked')}\n\n${t('manage.link', { url })}` };
 }
 
 export async function handleRemove(

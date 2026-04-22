@@ -1,11 +1,13 @@
 import { type Context, Telegraf } from 'telegraf';
 import { t } from '../i18n/index.js';
 import type { ConfirmationsService } from '../services/confirmations.js';
-import { handleHelp, handleList, handleRemove, handleStart } from './handlers.js';
+import type { ManageService } from '../services/manage.js';
+import { handleHelp, handleList, handleManage, handleRemove, handleStart } from './handlers.js';
 
 export interface BotOptions {
   token: string;
   service: ConfirmationsService;
+  manage: ManageService;
 }
 
 function chatIdOf(ctx: Context): bigint | null {
@@ -19,7 +21,7 @@ function commandArgs(ctx: Context, command: string): string {
   return withoutSlash.replace(/^@[^\s]+/, '').trim();
 }
 
-export function createBot({ token, service }: BotOptions): Telegraf {
+export function createBot({ token, service, manage }: BotOptions): Telegraf {
   const bot = new Telegraf(token);
 
   bot.start(async (ctx) => {
@@ -49,6 +51,13 @@ export function createBot({ token, service }: BotOptions): Telegraf {
     const chatId = chatIdOf(ctx);
     if (chatId === null) return;
     const { reply } = await handleRemove(service, { chatId, args: commandArgs(ctx, 'remove') });
+    await ctx.reply(reply);
+  });
+
+  bot.command('manage', async (ctx) => {
+    const chatId = chatIdOf(ctx);
+    if (chatId === null) return;
+    const { reply } = await handleManage(manage, { chatId, args: commandArgs(ctx, 'manage') });
     await ctx.reply(reply);
   });
 

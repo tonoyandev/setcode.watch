@@ -12,7 +12,7 @@ export const en = {
   'confirm.alreadySubscribed': 'You are already receiving alerts for {eoa} in this chat.',
   'confirm.success':
     'Subscribed. You will now receive alerts here when {eoa} is delegated to a new contract.',
-  help: 'SetCode.watch bot — available commands:\n/list — show the EOAs you are watching in this chat\n/remove <address> — unsubscribe from an EOA\n/help — show this message\n\nSubscribe by entering an address on https://setcode.watch.',
+  help: 'SetCode.watch bot — available commands:\n/list — show the EOAs you are watching in this chat\n/remove <address> — unsubscribe from an EOA\n/manage — open your subscriptions on the web\n/help — show this message\n\nSubscribe by entering an address on https://setcode.watch.',
   'list.empty':
     'You have no confirmed subscriptions in this chat. Add one on https://setcode.watch.',
   'list.header': 'You are watching {count} address(es) in this chat:',
@@ -21,6 +21,9 @@ export const en = {
   'remove.success':
     'Unsubscribed from {eoa}. You will no longer receive alerts for this address in this chat.',
   'remove.notFound': 'You were not subscribed to {eoa} in this chat.',
+  'manage.link':
+    'Manage your subscriptions at {url}\n\nThis link is single-use-per-chat; issuing /manage again rotates it.',
+  'manage.revoked': 'Any previous /manage link for this chat has been revoked.',
   'error.generic': 'Something went wrong handling that command. Please try again.',
   'alert.title.malicious': '⚠️ Malicious delegation detected',
   'alert.title.verified': '✅ Verified delegation change',

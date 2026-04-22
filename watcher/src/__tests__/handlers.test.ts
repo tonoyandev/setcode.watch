@@ -1,7 +1,14 @@
 import type { Address } from 'viem';
 import { describe, expect, it, vi } from 'vitest';
-import { handleHelp, handleList, handleRemove, handleStart } from '../bot/handlers.js';
+import {
+  handleHelp,
+  handleList,
+  handleManage,
+  handleRemove,
+  handleStart,
+} from '../bot/handlers.js';
 import type { ConfirmationsService } from '../services/confirmations.js';
+import type { ManageService } from '../services/manage.js';
 
 function makeService(overrides: Partial<ConfirmationsService>): ConfirmationsService {
   return {
@@ -129,5 +136,19 @@ describe('handleRemove', () => {
     const { reply } = await handleRemove(service, { chatId: 1n, args: mixed });
     expect(reply).toMatch(/were not subscribed/);
     expect(remove).toHaveBeenCalledWith({ eoa: ADDR, chatId: 1n });
+  });
+});
+
+describe('handleManage', () => {
+  it('issues a fresh token and formats the revoke + link reply', async () => {
+    const issue = vi.fn().mockResolvedValue({
+      token: 'tok_1',
+      url: 'https://setcode.watch/manage/tok_1',
+    });
+    const manage = { issue } as unknown as ManageService;
+    const { reply } = await handleManage(manage, { chatId: 99n, args: '' });
+    expect(issue).toHaveBeenCalledWith(99n);
+    expect(reply).toMatch(/previous \/manage link/);
+    expect(reply).toMatch('https://setcode.watch/manage/tok_1');
   });
 });

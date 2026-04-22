@@ -97,6 +97,25 @@ export const en = {
     'We could not create a confirmation link. Try again in a moment.',
 
   // --------------------------------------------------------------------
+  // Manage page (token-gated list + remove for a chat's subscriptions)
+  // --------------------------------------------------------------------
+  'manage.title': 'Manage your subscriptions',
+  'manage.intro':
+    'This page is authorised by the token in the URL your bot handed you. It lists the confirmed EOAs for that chat and lets you unsubscribe.',
+  'manage.loading': 'Loading your subscriptions…',
+  'manage.empty': 'No confirmed subscriptions for this chat. Add one from the subscribe page.',
+  'manage.count': 'Watching {count} address(es):',
+  'manage.confirmedAt': 'Confirmed {when}',
+  'manage.remove': 'Remove',
+  'manage.removing': 'Removing…',
+  'manage.removed': 'Removed {eoa}.',
+  'manage.removeFailed': 'Could not remove {eoa}. Try again.',
+  'manage.invalidToken':
+    'This manage link is not valid. Request a fresh one with /manage in the bot.',
+  'manage.notFound': 'This manage link was revoked. Request a fresh one with /manage in the bot.',
+  'manage.refresh': 'Refresh',
+
+  // --------------------------------------------------------------------
   // Shared errors
   // --------------------------------------------------------------------
   'error.network': 'Could not reach the service. Check your connection and try again.',

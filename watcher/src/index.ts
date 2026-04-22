@@ -16,11 +16,13 @@ import {
   requireTelegramToken,
   retentionSweepBatchSize,
   retentionSweepIntervalMs,
+  webBaseUrl,
 } from './lib/env.js';
 import { createCheckService } from './services/check.js';
 import { createClassificationService } from './services/classification.js';
 import { createConfirmationsService } from './services/confirmations.js';
 import { createDispatcherService } from './services/dispatcher.js';
+import { createManageService } from './services/manage.js';
 import { createTelegramClient } from './telegram/client.js';
 
 async function main() {
@@ -33,7 +35,9 @@ async function main() {
     maxSubscriptionsPerChat: maxSubscriptionsPerChat(),
   });
 
-  const bot = createBot({ token, service });
+  const manageService = createManageService(db, { webBaseUrl: webBaseUrl() });
+
+  const bot = createBot({ token, service, manage: manageService });
 
   const classification = createClassificationService(db);
   const checkService = createCheckService(db, {
@@ -43,6 +47,7 @@ async function main() {
   const app = createHttpApp({
     service,
     checkService,
+    manageService,
     botUsername,
     corsOrigins: corsOrigins(),
   });
