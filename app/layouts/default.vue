@@ -15,6 +15,7 @@ import { t } from '~/i18n';
           <nav class="layout__nav" aria-label="Primary">
             <NuxtLink to="/registry" class="layout__link">{{ t('nav.registry') }}</NuxtLink>
           </nav>
+          <GThemeToggle />
           <GConnectButton />
         </div>
       </div>

@@ -12,6 +12,12 @@ export const en = {
   'footer.github': 'GitHub',
 
   // --------------------------------------------------------------------
+  // Theme toggle
+  // --------------------------------------------------------------------
+  'theme.switchToLight': 'Switch to light theme',
+  'theme.switchToDark': 'Switch to dark theme',
+
+  // --------------------------------------------------------------------
   // Wallet connect chip
   // --------------------------------------------------------------------
   'wallet.connect': 'Connect Wallet',

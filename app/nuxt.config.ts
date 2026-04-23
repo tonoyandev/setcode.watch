@@ -14,6 +14,12 @@ export default defineNuxtConfig({
       charset: 'utf-8',
       viewport: 'width=device-width, initial-scale=1',
       title: 'SetCode.watch',
+      // Default <html data-theme="dark"> so SSR markup already matches the
+      // dark palette — a pre-hydration script below flips to "light" if the
+      // user has previously saved that preference in localStorage.
+      htmlAttrs: {
+        'data-theme': 'dark',
+      },
       meta: [
         {
           name: 'description',
@@ -23,6 +29,17 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#1a1815' },
       ],
       link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+      script: [
+        {
+          // Pre-hydration theme reconciliation. Runs before Nuxt boots, before
+          // any CSS paints. Without it, a user who previously chose "light"
+          // would see a dark flash on every page load. Ignored on failure so
+          // privacy-locked contexts (Safari private mode) still render.
+          innerHTML:
+            "try{var t=localStorage.getItem('setcode-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}",
+          tagPosition: 'head',
+        },
+      ],
     },
   },
   css: ['~/assets/css/tokens.css', '~/assets/css/reset.css', '~/assets/css/base.css'],
