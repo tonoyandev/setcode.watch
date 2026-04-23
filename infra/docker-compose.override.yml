@@ -1,0 +1,36 @@
+# Local dev override — expose services on host ports, skip TLS/Caddy.
+#
+# Usage (from repo root):
+#   docker compose -f infra/docker-compose.yml \
+#                  -f infra/docker-compose.override.yml \
+#                  --env-file infra/.env \
+#                  up -d postgres watcher-migrate watcher indexer app
+#
+# The explicit service list omits `caddy` — we hit the app and watcher
+# directly on localhost. CORS on the watcher is widened to allow the app's
+# host-exposed origin; the Nuxt bundle is rebuilt with the direct API URL.
+
+services:
+  postgres:
+    ports:
+      - '5433:5432'
+
+  watcher:
+    ports:
+      - '8787:8787'
+    environment:
+      # Browser talks to the watcher on localhost:8787 directly (no Caddy
+      # path-rewrite), so CORS has to allow the app's Nuxt origin.
+      WATCHER_CORS_ORIGIN: http://localhost:3000
+      WATCHER_WEB_BASE_URL: http://localhost:3000
+
+  app:
+    build:
+      args:
+        # Override the default `/api` — in local mode the browser hits the
+        # watcher on its own origin, not through Caddy.
+        NUXT_PUBLIC_WATCHER_API_URL: http://localhost:8787
+    ports:
+      - '3000:3000'
+    environment:
+      NUXT_PUBLIC_WATCHER_API_URL: http://localhost:8787

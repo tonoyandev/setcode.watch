@@ -94,6 +94,9 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-setcode}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-setcode}
+      # Ponder's production mode requires an explicit namespace. Each fresh
+      # deploy gets its own schema so readers can pin the one they expect.
+      DATABASE_SCHEMA: ${PONDER_DATABASE_SCHEMA:-indexer}
       ETH_RPC_URL: ${ETH_RPC_URL:?ETH_RPC_URL is required}
       ETH_RPC_FALLBACK_1: ${ETH_RPC_FALLBACK_1:-}
       ETH_RPC_FALLBACK_2: ${ETH_RPC_FALLBACK_2:-}
@@ -115,6 +118,9 @@ services:
         # /api which Caddy proxies on-origin to the watcher.
         NUXT_PUBLIC_WATCHER_API_URL: /api
         NUXT_PUBLIC_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+        # Reown (WalletConnect) project ID. Without it the Connect Wallet
+        # button falls back to injected wallets only. Free at cloud.reown.com.
+        NUXT_PUBLIC_REOWN_PROJECT_ID: ${NUXT_PUBLIC_REOWN_PROJECT_ID:-}
     restart: unless-stopped
     environment:
       NITRO_HOST: 0.0.0.0
@@ -123,6 +129,7 @@ services:
       # with the build-time ARGs above.
       NUXT_PUBLIC_WATCHER_API_URL: /api
       NUXT_PUBLIC_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      NUXT_PUBLIC_REOWN_PROJECT_ID: ${NUXT_PUBLIC_REOWN_PROJECT_ID:-}
     depends_on:
       watcher:
         condition: service_healthy

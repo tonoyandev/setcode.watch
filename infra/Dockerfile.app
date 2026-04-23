@@ -10,6 +10,8 @@
 
 # ---------- deps ----------
 FROM node:22-alpine AS deps
+# Native build tools for node-gyp (utf-8-validate, keccak, etc).
+RUN apk add --no-cache python3 make g++
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /repo
 
@@ -33,8 +35,10 @@ COPY app    app
 FROM deps AS build
 ARG NUXT_PUBLIC_WATCHER_API_URL=/api
 ARG NUXT_PUBLIC_BOT_USERNAME
+ARG NUXT_PUBLIC_REOWN_PROJECT_ID=
 ENV NUXT_PUBLIC_WATCHER_API_URL=$NUXT_PUBLIC_WATCHER_API_URL
 ENV NUXT_PUBLIC_BOT_USERNAME=$NUXT_PUBLIC_BOT_USERNAME
+ENV NUXT_PUBLIC_REOWN_PROJECT_ID=$NUXT_PUBLIC_REOWN_PROJECT_ID
 RUN pnpm --filter=@setcode/app build
 
 # ---------- runner ----------
