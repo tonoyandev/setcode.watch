@@ -2,10 +2,12 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { normaliseEoa } from '../lib/address.js';
+import { renderMetrics } from '../lib/metrics.js';
 import type { CheckService } from '../services/check.js';
 import type { ConfirmationsService } from '../services/confirmations.js';
 import type { ManageService } from '../services/manage.js';
 import type { RegistryService } from '../services/registry.js';
+import { metricsMiddleware } from './metrics-middleware.js';
 
 export interface HttpServerOptions {
   service: ConfirmationsService;
@@ -53,7 +55,16 @@ export function createHttpApp({
     }),
   );
 
+  app.use('*', metricsMiddleware());
+
   app.get('/health', (c) => c.json({ ok: true }));
+
+  // Prometheus scrape endpoint. Caddy refuses /api/metrics from the public
+  // surface; scrapers reach this over the internal Docker network.
+  app.get('/metrics', async (c) => {
+    const { body, contentType } = await renderMetrics();
+    return c.body(body, 200, { 'Content-Type': contentType });
+  });
 
   app.post('/confirmations', async (c) => {
     let body: unknown;

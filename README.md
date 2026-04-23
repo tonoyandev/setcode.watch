@@ -19,7 +19,7 @@ No custody, no private keys, no transaction signing. The service only watches.
 
 ## Status
 
-**Pre-MVP, mid-build.** 15 of 16 bootstrap steps complete; step 15 (docs) just shipped.
+**MVP complete.** All 16 bootstrap steps done; step 16 (CI + Prometheus metrics) just shipped.
 
 | Step | Area | State |
 | ---- | ---- | ----- |
@@ -37,11 +37,10 @@ No custody, no private keys, no transaction signing. The service only watches.
 | 12 | `/manage` flow — token-gated subscription manager | **done** |
 | 13 | Registry browser | **done** |
 | 14 | `docker-compose` + Caddy for self-host | done |
-| 15 | Docs (governance, threat model, operator runbook) | **done** |
-| 16 | CI workflows + Prometheus metrics | pending |
+| 15 | Docs (governance, threat model, operator runbook) | done |
+| 16 | CI workflows + Prometheus metrics | **done** |
 
-Test counts at HEAD: **104 passing** (78 watcher + 0 indexer unit* + 26 app).
-*Indexer has unit tests for the delegation-designator parser; mainnet-fork tests land later.
+Test counts at HEAD: **152 passing** (89 watcher + 11 indexer + 26 app + 26 contracts).
 
 ---
 
@@ -260,13 +259,16 @@ Full docs live in [`docs/`](./docs/):
 - [`OPERATIONS.md`](./docs/OPERATIONS.md) — self-host runbook: first boot, logs, backups, rotation, troubleshooting.
 - [`ROADMAP.md`](./docs/ROADMAP.md) — what's beyond MVP (L2, mempool awareness, reverse lookup, anomaly signals).
 
-## Roadmap (step 16)
+## Observability
 
-### Step 16 — CI + observability
+Both long-running services expose Prometheus metrics internally:
 
-- GitHub Actions: lint, typecheck, test, gas-snapshot-check on every PR.
-- Prometheus metrics from the watcher: dispatcher lag, send successes, send failures by class, per-tick duration.
-- Healthcheck endpoints already exist; wire them into compose healthchecks.
+- **watcher** at `http://watcher:8787/metrics` — dispatcher ticks + outcome, send results (`success` / `permanent_fail` / `transient_fail`), cursor block, HTTP request histogram, Node.js process metrics. Prefix `setcode_watcher_`.
+- **indexer** at `http://indexer:42069/metrics` — Ponder's upstream metrics (indexing lag, RPC calls, handler durations).
+
+Neither endpoint is published to the host or reachable through Caddy — scrape them over the internal Docker network. See [`docs/OPERATIONS.md`](./docs/OPERATIONS.md#metrics) for an example `prometheus.yml` snippet and starter alert rules.
+
+CI runs lint, typecheck, tests, gas-snapshot check, Slither on every PR; see `.github/workflows/` for the six workflows and `.github/dependabot.yml` for grouped weekly updates.
 
 ---
 

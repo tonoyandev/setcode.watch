@@ -18,6 +18,7 @@ import {
   retentionSweepIntervalMs,
   webBaseUrl,
 } from './lib/env.js';
+import { startDefaultMetrics } from './lib/metrics.js';
 import { createCheckService } from './services/check.js';
 import { createClassificationService } from './services/classification.js';
 import { createConfirmationsService } from './services/confirmations.js';
@@ -29,6 +30,10 @@ import { createTelegramClient } from './telegram/client.js';
 async function main() {
   const token = requireTelegramToken();
   const botUsername = requireBotUsername();
+
+  // Process-level metrics (event loop lag, heap, GC). Opt-in here so vitest
+  // cases that import the metrics module don't hook the real process.
+  startDefaultMetrics();
 
   const db = createDatabase();
   const service = createConfirmationsService(db, {

@@ -33,6 +33,11 @@
 		-Server
 	}
 
+	# Block the Prometheus scrape endpoints from the public surface. Scrapers
+	# reach /metrics over the internal Docker network, not through Caddy.
+	@metrics path /api/metrics /api/metrics/*
+	respond @metrics 404
+
 	# API: strip /api and forward to the watcher. `handle_path` (vs `handle`)
 	# is what removes the prefix; the watcher sees /check, /confirmations, …
 	handle_path /api/* {

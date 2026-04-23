@@ -31,19 +31,13 @@ Unlocking an L2:
 No watcher changes. The dispatcher already filters by chain when
 formatting messages.
 
-### Prometheus metrics
+### Dispatcher-lag-seconds metric
 
-Stubbed in step 16. Target metrics:
-
-- `dispatcher_lag_seconds` — `now() - max(delegation_event.timestamp)`
-  where dispatcher cursor is caught up.
-- `dispatcher_send_total{result=success|retry|permanent_fail}` — counter.
-- `dispatcher_tick_duration_seconds` — histogram.
-- `indexer_lag_blocks` — chain tip minus last indexed block.
-- `http_requests_total{route,status}` — Hono middleware counter.
-
-Expose on the watcher at `/metrics`. Caddy already rejects it from the
-public surface; scrape via the internal Docker network.
+Shipped in step 16: `dispatcher_cursor_last_block` plus the indexer's own
+Ponder metrics give lag indirectly. A direct `dispatcher_lag_seconds`
+gauge would need an RPC call for chain tip time; worth adding once we
+can amortise it across the scrape interval rather than hitting the RPC
+per tick.
 
 ### Dependabot / Renovate
 

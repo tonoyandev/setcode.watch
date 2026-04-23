@@ -183,6 +183,41 @@ fresh delegation rows from Ponder — either the indexer is behind, or the two
 services are pointed at different databases. Compare `DATABASE_URL` across
 the three compose services.
 
+## Metrics
+
+Both the watcher and the indexer expose Prometheus metrics on their internal
+container ports:
+
+- `watcher:8787/metrics` — dispatcher ticks, send outcomes, cursor block,
+  HTTP request histogram, Node.js process metrics (heap, event loop lag,
+  GC). Series are prefixed `setcode_watcher_`.
+- `indexer:42069/metrics` — Ponder's own metrics (indexing lag, RPC calls,
+  handler durations). Shape matches upstream Ponder.
+
+Neither endpoint is published to the host. Scrape them from a Prometheus
+running on the same Docker network, for example:
+
+```yaml
+# prometheus.yml snippet
+scrape_configs:
+  - job_name: setcode-watcher
+    static_configs: [{ targets: ['watcher:8787'] }]
+  - job_name: setcode-indexer
+    static_configs: [{ targets: ['indexer:42069'] }]
+```
+
+Caddy explicitly returns 404 for `/api/metrics` on the public surface —
+`/metrics` is internal-only by design.
+
+Useful alerts to start with:
+
+- `rate(setcode_watcher_dispatcher_ticks_total{outcome="error"}[5m]) > 0`
+  — dispatcher is failing ticks.
+- `setcode_watcher_dispatcher_cursor_last_block` stagnant for >5m while
+  the indexer is healthy — dispatcher is stuck.
+- `rate(setcode_watcher_dispatcher_send_total{result="transient_fail"}[5m]) > 0.1`
+  — Telegram API is flapping.
+
 ## Production hardening (beyond MVP)
 
 - Put the host behind a firewall; only ports 80/443 should be reachable.

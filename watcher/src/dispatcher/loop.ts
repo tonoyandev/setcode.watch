@@ -1,3 +1,10 @@
+import {
+  recordEventsProcessed,
+  recordRetentionSwept,
+  recordSend,
+  recordTick,
+  setCursorLastBlock,
+} from '../lib/metrics.js';
 import type { DispatcherService } from '../services/dispatcher.js';
 
 export interface DispatcherLoopOptions {
@@ -31,15 +38,28 @@ export function startDispatcherLoop(
   let tickInFlight: Promise<void> | null = null;
 
   async function tick(): Promise<void> {
+    const tickStart = performance.now();
+    let tickOutcome: 'ok' | 'error' = 'ok';
     try {
       const result = await service.processBatch();
+      recordEventsProcessed(result.events);
+      recordSend('success', result.sent);
+      recordSend('permanent_fail', result.permanentFailures);
+      recordSend('transient_fail', result.transientFailures);
       if (result.events > 0 || result.sent > 0) {
         log.info(
           `[dispatcher] tick events=${result.events} sent=${result.sent} permanent=${result.permanentFailures} transient=${result.transientFailures} advanced=${result.advanced}`,
         );
       }
+      if (result.advanced) {
+        const cursor = await service.readCursor();
+        setCursorLastBlock(cursor?.lastBlock ?? null);
+      }
     } catch (err) {
+      tickOutcome = 'error';
       log.error('[dispatcher] tick failed:', err);
+    } finally {
+      recordTick(tickOutcome, (performance.now() - tickStart) / 1000);
     }
 
     const now = Date.now();
@@ -47,6 +67,7 @@ export function startDispatcherLoop(
       lastSweep = now;
       try {
         const swept = await service.runRetentionSweep();
+        recordRetentionSwept(swept.deleted);
         if (swept.deleted > 0) {
           log.info(
             `[dispatcher] retention swept ${swept.deleted} rows in ${swept.iterations} iterations`,
@@ -72,7 +93,10 @@ export function startDispatcherLoop(
 
   void service
     .initialiseCursorIfMissing()
-    .then(() => {
+    .then(async () => {
+      // Seed the cursor gauge so `/metrics` has a value before the first tick.
+      const cursor = await service.readCursor();
+      setCursorLastBlock(cursor?.lastBlock ?? null);
       log.info('[dispatcher] loop started');
       schedule();
     })
