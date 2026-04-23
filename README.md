@@ -19,7 +19,7 @@ No custody, no private keys, no transaction signing. The service only watches.
 
 ## Status
 
-**Pre-MVP, mid-build.** 14 of 16 bootstrap steps complete; step 14 (deploy surface) just shipped.
+**Pre-MVP, mid-build.** 15 of 16 bootstrap steps complete; step 15 (docs) just shipped.
 
 | Step | Area | State |
 | ---- | ---- | ----- |
@@ -36,8 +36,8 @@ No custody, no private keys, no transaction signing. The service only watches.
 | 11 | `/subscribe` flow — EOA → Telegram binding UI | done |
 | 12 | `/manage` flow — token-gated subscription manager | **done** |
 | 13 | Registry browser | **done** |
-| 14 | `docker-compose` + Caddy for self-host | **done** |
-| 15 | Docs (governance, threat model, operator runbook) | pending |
+| 14 | `docker-compose` + Caddy for self-host | done |
+| 15 | Docs (governance, threat model, operator runbook) | **done** |
 | 16 | CI workflows + Prometheus metrics | pending |
 
 Test counts at HEAD: **104 passing** (78 watcher + 0 indexer unit* + 26 app).
@@ -250,19 +250,17 @@ Nuxt 3.21 SSR app. Shipped through step 13:
 
 ---
 
-## Roadmap (steps 15-16)
+## Docs
 
-Rough notes to help pick up where step 14 left off.
+Full docs live in [`docs/`](./docs/):
 
-### Step 15 — Docs
+- [`ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — process topology, data flow, invariants.
+- [`GOVERNANCE.md`](./docs/GOVERNANCE.md) — static + on-chain registry governance, evidence rules, emergency procedure.
+- [`THREAT_MODEL.md`](./docs/THREAT_MODEL.md) — attacker classes, mitigations, explicit non-goals.
+- [`OPERATIONS.md`](./docs/OPERATIONS.md) — self-host runbook: first boot, logs, backups, rotation, troubleshooting.
+- [`ROADMAP.md`](./docs/ROADMAP.md) — what's beyond MVP (L2, mempool awareness, reverse lookup, anomaly signals).
 
-`docs/` directory:
-
-- `GOVERNANCE.md` — who can add registry entries, verification criteria, downgrade policy.
-- `THREAT_MODEL.md` — attacker classes, mitigations, explicit non-goals.
-- `OPERATIONS.md` — deploy, backup, restore, rotate secrets.
-- `ARCHITECTURE.md` — the diagram above, expanded.
-- `ROADMAP.md` — what's beyond MVP (L2, reverse lookup, anomaly detection).
+## Roadmap (step 16)
 
 ### Step 16 — CI + observability
 
