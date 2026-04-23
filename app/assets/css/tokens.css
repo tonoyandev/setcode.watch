@@ -145,7 +145,7 @@
  * Applied via `[data-theme="dark"]` on <html>. The default attribute is
  * written server-side in nuxt.config.ts so SSR matches the first client paint.
  */
-:root[data-theme='dark'] {
+:root[data-theme="dark"] {
   --color-bg-page: #1a1815; /* warm charcoal */
   --color-bg-surface: #24221e; /* lifted card */
   --color-bg-subtle: #2a2722; /* section dividers */

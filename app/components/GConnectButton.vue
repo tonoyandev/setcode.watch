@@ -15,7 +15,7 @@ import { t } from '~/i18n';
 // lets us theme it with CSS custom properties instead of fighting AppKit
 // CSS vars.
 
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 const { address, isConnected, open, disconnect } = useWallet();
 const menuOpen = ref(false);

@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { type Address, isAddress } from 'viem';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useWallet } from '~/composables/useWallet';
 import {
   type CheckResponse,
   type CreateConfirmationResponse,
   WatcherApiException,
   useWatcherApi,
 } from '~/composables/useWatcherApi';
-import { useWallet } from '~/composables/useWallet';
 import { t } from '~/i18n';
 
 useHead({ title: 'SetCode.watch — monitoring for EIP-7702 delegations' });
