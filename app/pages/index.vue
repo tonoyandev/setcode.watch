@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRight, Loader2, Search, X } from 'lucide-vue-next';
+import { ArrowRight, ChevronDown, Loader2, Search, X } from 'lucide-vue-next';
 import { type Address, isAddress } from 'viem';
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
 import { useChainCatalog } from '~/composables/useChainCatalog';
@@ -37,6 +37,11 @@ const focused = ref(false);
 // synchronous (just validation + setting checkedAddress), so this stays
 // false except during the brief click handler.
 const checking = ref(false);
+
+// Testnets are collapsed by default — they're rarely the user's focus and
+// would otherwise dominate the table by row count. The toggle lives at
+// the same indent level as the Mainnets header for symmetry.
+const testnetsOpen = ref(false);
 
 const subscribing = ref(false);
 const confirmation = ref<CreateConfirmationResponse | null>(null);
@@ -264,6 +269,53 @@ const watchLink = computed(() => {
             </table>
           </section>
 
+          <section class="results__group results__group--testnets">
+            <button
+              type="button"
+              class="results__toggle"
+              :aria-expanded="testnetsOpen"
+              aria-controls="testnets-table"
+              @click="testnetsOpen = !testnetsOpen"
+            >
+              <span class="results__heading">
+                {{ t('home.table.testnetsHeading') }}
+              </span>
+              <ChevronDown
+                :size="18"
+                class="results__caret"
+                :class="{ 'results__caret--open': testnetsOpen }"
+                aria-hidden="true"
+              />
+            </button>
+            <table v-if="testnetsOpen" id="testnets-table" class="results__table">
+              <thead>
+                <tr>
+                  <th class="results__th results__th--chain">
+                    {{ t('home.table.chain') }}
+                  </th>
+                  <th class="results__th">
+                    {{ t('home.table.delegation') }}
+                  </th>
+                  <th class="results__th results__th--actions">
+                    {{ t('home.table.actions') }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <GChainRow
+                  v-for="chain in testnets"
+                  :key="chain.id"
+                  :chain="chain"
+                  :address="checkedAddress"
+                  :subscribing="subscribing"
+                  :watch-link="watchLink"
+                  @subscribe="onSubscribe"
+                  @classified="onChainClassified"
+                />
+              </tbody>
+            </table>
+          </section>
+
           <p v-if="subscribeError" class="home__error" role="alert">
             {{ subscribeError }}
           </p>
@@ -330,39 +382,6 @@ const watchLink = computed(() => {
       <div class="why__inner">
         <h2 class="why__title">{{ t('landing.why.title') }}</h2>
         <p class="why__body">{{ t('landing.why.body') }}</p>
-      </div>
-    </section>
-
-    <section class="testnets">
-      <div class="testnets__inner">
-        <h2 class="testnets__title">{{ t('home.table.testnetsHeading') }}</h2>
-        <table class="results__table">
-          <thead>
-            <tr>
-              <th class="results__th results__th--chain">
-                {{ t('home.table.chain') }}
-              </th>
-              <th class="results__th">
-                {{ t('home.table.delegation') }}
-              </th>
-              <th class="results__th results__th--actions">
-                {{ t('home.table.actions') }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <GChainRow
-              v-for="chain in testnets"
-              :key="chain.id"
-              :chain="chain"
-              :address="checkedAddress"
-              :subscribing="subscribing"
-              :watch-link="watchLink"
-              @subscribe="onSubscribe"
-              @classified="onChainClassified"
-            />
-          </tbody>
-        </table>
       </div>
     </section>
   </div>
@@ -557,6 +576,42 @@ const watchLink = computed(() => {
   letter-spacing: -0.01em;
 }
 
+/* Collapsible testnets group — same indent as the Mainnets header but
+   the heading itself is a button, with a chevron on the right that
+   rotates to indicate expanded state. */
+.results__group--testnets {
+  margin-top: var(--space-3);
+}
+
+.results__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  background: transparent;
+  border: 0;
+  border-top: var(--border-width) solid var(--color-border);
+  cursor: pointer;
+  color: var(--color-ink-strong);
+  text-align: left;
+}
+.results__toggle:hover {
+  background: var(--color-bg-subtle);
+}
+.results__toggle:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: -2px;
+}
+
+.results__caret {
+  color: var(--color-ink-muted);
+  transition: transform var(--duration-fast) var(--ease);
+}
+.results__caret--open {
+  transform: rotate(180deg);
+}
+
 .results__table {
   width: 100%;
   border-collapse: collapse;
@@ -688,26 +743,6 @@ const watchLink = computed(() => {
   color: var(--color-ink);
   max-width: 72ch;
   margin: 0;
-}
-
-/* Testnets section (page bottom) ------------------------------------ */
-
-.testnets {
-  padding: var(--space-12) var(--space-6) var(--space-16);
-}
-
-.testnets__inner {
-  max-width: var(--width-content);
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.testnets__title {
-  margin: 0;
-  font-size: var(--text-xl);
-  color: var(--color-ink-strong);
 }
 
 /* Mobile ------------------------------------------------------------ */

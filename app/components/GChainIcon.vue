@@ -5,11 +5,14 @@ defineProps<{ chain: ChainMeta }>();
 </script>
 
 <template>
-  <span class="g-chain-icon" :aria-hidden="true">
+  <span
+    class="g-chain-icon"
+    :class="{ 'g-chain-icon--testnet': chain.group === 'testnet' }"
+    :aria-hidden="true"
+  >
     <span
       v-if="chain.icon === 'eth'"
       class="g-chain-icon__circle g-chain-icon__circle--eth"
-      :class="{ 'g-chain-icon__circle--faded': chain.group === 'testnet' }"
     >
       <!-- Ethereum diamond — re-used across mainnet + Sepolia/Holesky/Hoodi.
            Testnets render with reduced opacity so mainnet stays the visual
@@ -40,6 +43,15 @@ defineProps<{ chain: ChainMeta }>();
   justify-content: center;
 }
 
+/* Testnets sit in a collapsed table at the page bottom — desaturate
+   the icons so colorful L2 brand marks don't pull focus away from the
+   mainnet rows that drive the actual product. Applies uniformly to
+   both the ETH diamond variant and the colored-mark variant. */
+.g-chain-icon--testnet {
+  filter: grayscale(1);
+  opacity: 0.65;
+}
+
 .g-chain-icon__circle {
   display: inline-flex;
   align-items: center;
@@ -58,10 +70,6 @@ defineProps<{ chain: ChainMeta }>();
   background: var(--color-bg-subtle);
   color: var(--color-ink-strong);
   border: var(--border-width) solid var(--color-border);
-}
-
-.g-chain-icon__circle--faded {
-  opacity: 0.55;
 }
 
 .g-chain-icon__circle--mark {
