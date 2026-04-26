@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { ArrowRight, Loader2, Search, X } from 'lucide-vue-next';
 import { type Address, isAddress } from 'viem';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
+import { useChainCatalog } from '~/composables/useChainCatalog';
 import { useWallet } from '~/composables/useWallet';
 import {
   type CheckResponse,
@@ -17,12 +19,24 @@ const wallet = useWallet();
 const config = useRuntimeConfig();
 const botUsername = config.public.botUsername;
 
+const { chains } = useChainCatalog();
+
+const inputId = useId();
 const input = ref('');
-const lastLookedUp = ref<Address | null>(null);
-const checking = ref(false);
-const result = ref<CheckResponse | null>(null);
+// The address rows are checking against. Null = "no lookup yet" (every row
+// renders its idle state). Set when the user submits or the wallet connects.
+const checkedAddress = ref<Address | null>(null);
+// Latched per-chain results bubbled up by GChainRow. Keyed by chain id.
+// Currently only mainnet drives the page-level Subscribe gate, but the
+// shape generalises cleanly when more chains become monitored.
+const chainResults = ref<Record<number, CheckResponse>>({});
 const clientError = ref<string | null>(null);
-const serverError = ref<string | null>(null);
+const focused = ref(false);
+// Mirrors the in-flight state of the form submit button. We can't easily
+// know when every row has finished, but the form submit itself is
+// synchronous (just validation + setting checkedAddress), so this stays
+// false except during the brief click handler.
+const checking = ref(false);
 
 const subscribing = ref(false);
 const confirmation = ref<CreateConfirmationResponse | null>(null);
@@ -57,9 +71,23 @@ watch(
 
 const canCheck = computed(() => input.value.trim().length > 0 && !checking.value);
 
+// Mainnet is the only chain that drives the Subscribe flow today.
+// Hide if we don't have a classified result for it yet.
+const mainnetChainId = computed(() => {
+  const m = chains.find((c) => c.monitored);
+  return m?.id ?? null;
+});
+const mainnetResult = computed<CheckResponse | null>(() => {
+  const id = mainnetChainId.value;
+  if (id === null) return null;
+  return chainResults.value[id] ?? null;
+});
+const hasMainnetDelegation = computed(
+  () => !!mainnetResult.value && mainnetResult.value.currentTarget !== null,
+);
+
 async function onCheck() {
   clientError.value = null;
-  serverError.value = null;
   const candidate = input.value.trim();
   if (!isAddress(candidate)) {
     clientError.value = t('error.invalidAddress');
@@ -70,42 +98,33 @@ async function onCheck() {
 
 async function runCheck(addr: Address) {
   checking.value = true;
-  result.value = null;
-  confirmation.value = null;
-  subscribeError.value = null;
   try {
-    result.value = await api.check(addr);
-    lastLookedUp.value = addr.toLowerCase() as Address;
-  } catch (err) {
-    if (err instanceof WatcherApiException) {
-      const kind = err.detail.kind;
-      serverError.value =
-        kind === 'invalid_eoa'
-          ? t('error.invalidAddress')
-          : kind === 'network'
-            ? t('error.network')
-            : t('error.generic');
-    } else {
-      serverError.value = t('error.generic');
-    }
+    chainResults.value = {};
+    confirmation.value = null;
+    subscribeError.value = null;
+    checkedAddress.value = addr.toLowerCase() as Address;
   } finally {
+    // Form-side state. Per-row spinners are owned by GChainRow.
     checking.value = false;
   }
 }
 
 function onReset() {
   input.value = '';
-  result.value = null;
-  lastLookedUp.value = null;
+  checkedAddress.value = null;
+  chainResults.value = {};
   confirmation.value = null;
   clientError.value = null;
-  serverError.value = null;
   subscribeError.value = null;
+}
+
+function onChainClassified(payload: { chainId: number; result: CheckResponse }) {
+  chainResults.value = { ...chainResults.value, [payload.chainId]: payload.result };
 }
 
 // --- Subscribe flow: mints a confirmation code, bot deep-links the user.
 async function onSubscribe() {
-  const addr = lastLookedUp.value;
+  const addr = checkedAddress.value;
   if (!addr || subscribing.value) return;
   subscribing.value = true;
   subscribeError.value = null;
@@ -148,28 +167,12 @@ const secondsRemaining = computed(() => {
 const expired = computed(() => secondsRemaining.value === 0);
 
 // --- Watch flow: opens t.me/<bot>?start=w_<addr>. No backend round-trip.
+// Only meaningful once mainnet has classified the address; the row hides
+// the link until then anyway via its own `watchVisible` computed.
 const watchLink = computed(() => {
-  const addr = lastLookedUp.value;
-  if (!addr) return '';
+  const addr = checkedAddress.value;
+  if (!addr || !hasMainnetDelegation.value) return '';
   return `https://t.me/${botUsername}?start=w_${addr}`;
-});
-
-const sourceCopy = computed(() => {
-  const src = result.value?.source;
-  if (!src) return null;
-  if (src === 'registry') return t('home.result.source.registry');
-  if (src === 'static') return t('home.result.source.static');
-  return t('home.result.source.unknown');
-});
-
-const lastUpdatedLabel = computed(() => {
-  const ts = result.value?.lastUpdated;
-  if (!ts) return null;
-  try {
-    return new Date(ts * 1000).toISOString();
-  } catch {
-    return null;
-  }
 });
 </script>
 
@@ -177,153 +180,127 @@ const lastUpdatedLabel = computed(() => {
   <div class="home">
     <section class="hero">
       <div class="hero__inner">
-        <p class="hero__eyebrow">EIP-7702 · Ethereum mainnet</p>
+        <p class="hero__eyebrow">EIP-7702 · Multi-chain coverage</p>
         <h1 class="hero__headline">{{ t('landing.hero.headline') }}</h1>
         <p class="hero__subhead">{{ t('landing.hero.subhead') }}</p>
 
         <form class="lookup" @submit.prevent="onCheck">
-          <GInput
-            v-model="input"
-            :label="t('home.lookup.label')"
-            :placeholder="t('home.lookup.placeholder')"
-            v-bind="clientError ? { error: clientError } : {}"
-            monospace
-            autocomplete="off"
-          />
-          <div class="lookup__hint">
-            <ClientOnly>
-              <span v-if="wallet.isConnected.value" class="lookup__hint-chip">
-                {{ t('home.lookup.autofilled') }}
-              </span>
-              <span v-else class="lookup__hint-plain">
-                {{ t('home.lookup.hint') }}
-              </span>
-            </ClientOnly>
-          </div>
-          <div class="lookup__actions">
-            <GButton type="submit" size="lg" :disabled="!canCheck" :loading="checking">
-              {{ checking ? t('home.lookup.checking') : t('home.lookup.submit') }}
-            </GButton>
-            <GButton
-              v-if="result || clientError || serverError"
+          <label :for="inputId" class="lookup__srlabel">
+            {{ t('home.lookup.label') }}
+          </label>
+          <div
+            class="lookup__field"
+            :class="{
+              'lookup__field--error': !!clientError,
+              'lookup__field--focus': focused,
+            }"
+          >
+            <Search class="lookup__leadIcon" :size="18" aria-hidden="true" />
+            <input
+              :id="inputId"
+              v-model="input"
+              type="text"
+              class="lookup__input"
+              :placeholder="t('home.lookup.placeholder')"
+              autocomplete="off"
+              spellcheck="false"
+              @focus="focused = true"
+              @blur="focused = false"
+            />
+            <button
+              v-if="input.length > 0"
               type="button"
-              variant="ghost"
-              size="lg"
+              class="lookup__clearBtn"
+              :aria-label="t('home.lookup.clearAria')"
               @click.stop="onReset"
             >
-              {{ t('home.lookup.reset') }}
-            </GButton>
+              <X :size="16" aria-hidden="true" />
+            </button>
+            <button
+              type="submit"
+              class="lookup__submitBtn"
+              :disabled="!canCheck"
+              :aria-label="t('home.lookup.submit')"
+              :title="t('home.lookup.submit')"
+            >
+              <Loader2 v-if="checking" :size="18" class="lookup__spin" aria-hidden="true" />
+              <ArrowRight v-else :size="18" aria-hidden="true" />
+            </button>
           </div>
+          <p v-if="clientError" class="lookup__inlineError" role="alert">
+            {{ clientError }}
+          </p>
         </form>
 
-        <p v-if="serverError" class="home__error" role="alert">{{ serverError }}</p>
+        <div class="results">
+          <table class="results__table">
+            <thead>
+              <tr>
+                <th class="results__th results__th--chain">
+                  {{ t('home.table.chain') }}
+                </th>
+                <th class="results__th">
+                  {{ t('home.table.delegation') }}
+                </th>
+                <th class="results__th results__th--actions">
+                  {{ t('home.table.actions') }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <GChainRow
+                v-for="chain in chains"
+                :key="chain.id"
+                :chain="chain"
+                :address="checkedAddress"
+                :subscribing="subscribing"
+                :watch-link="watchLink"
+                @subscribe="onSubscribe"
+                @classified="onChainClassified"
+              />
+            </tbody>
+          </table>
 
-        <div class="hero__badges" aria-label="Classification legend">
-          <GBadge classification="verified" size="inline" />
-          <GBadge classification="unknown" size="inline" />
-          <GBadge classification="malicious" size="inline" />
-        </div>
-      </div>
-    </section>
+          <p v-if="subscribeError" class="home__error" role="alert">
+            {{ subscribeError }}
+          </p>
 
-    <section v-if="result" class="result">
-      <GCard class="result__card" padded elevated>
-        <header class="result__header">
-          <h2 class="result__title">{{ t('home.result.title') }}</h2>
-          <GBadge :classification="result.classification" size="card" />
-        </header>
+          <div v-if="confirmation" class="confirm">
+            <h3 class="confirm__title">{{ t('home.confirm.title') }}</h3>
+            <p class="confirm__body">{{ t('home.confirm.body') }}</p>
 
-        <dl class="result__kv">
-          <div class="result__kv-row">
-            <dt>{{ t('home.result.eoa') }}</dt>
-            <dd><GAddress :address="result.eoa" /></dd>
-          </div>
-          <div class="result__kv-row">
-            <dt>{{ t('home.result.delegatesTo') }}</dt>
-            <dd v-if="result.currentTarget">
-              <GAddress :address="result.currentTarget" />
-            </dd>
-            <dd v-else class="result__muted">
-              {{ t('home.result.noDelegation') }}
-            </dd>
-          </div>
-          <div v-if="lastUpdatedLabel" class="result__kv-row">
-            <dt>{{ t('home.result.lastUpdated') }}</dt>
-            <dd class="result__muted">
-              <time :datetime="lastUpdatedLabel">{{ lastUpdatedLabel }}</time>
-            </dd>
-          </div>
-        </dl>
-
-        <p v-if="sourceCopy" class="result__source">{{ sourceCopy }}</p>
-
-        <div class="result__actions">
-          <div class="result__cta">
             <GButton
-              variant="primary"
-              size="md"
-              type="button"
-              :loading="subscribing"
-              :disabled="subscribing"
-              @click.stop="onSubscribe"
-            >
-              {{ t('home.cta.subscribe') }}
-            </GButton>
-            <GTooltip :label="t('home.cta.subscribe.tooltip')" placement="top" />
-          </div>
-
-          <div class="result__cta">
-            <GButton
+              v-if="!expired"
               as="a"
-              :href="watchLink"
-              variant="secondary"
+              :href="confirmation.deepLink"
+              variant="primary"
               size="md"
               target="_blank"
               rel="noopener noreferrer"
             >
-              {{ t('home.cta.watch') }}
+              {{ t('home.confirm.cta') }}
             </GButton>
-            <GTooltip :label="t('home.cta.watch.tooltip')" placement="top" />
+            <p v-else class="home__error" role="alert">
+              {{ t('home.confirm.expired') }}
+            </p>
+
+            <p
+              v-if="secondsRemaining !== null && !expired"
+              class="confirm__countdown"
+            >
+              {{ t('home.confirm.expiresIn', { seconds: secondsRemaining }) }}
+            </p>
+
+            <div class="confirm__fallback">
+              <p>{{ t('home.confirm.fallback', { bot: botUsername }) }}</p>
+              <GCodeBlock>/start {{ confirmation.code }}</GCodeBlock>
+              <GButton type="button" variant="ghost" size="sm" @click.stop="onCopyCode">
+                {{ copied ? t('home.confirm.copied') : t('home.confirm.copyCode') }}
+              </GButton>
+            </div>
           </div>
         </div>
-
-        <p v-if="subscribeError" class="home__error" role="alert">{{ subscribeError }}</p>
-
-        <div v-if="confirmation" class="confirm">
-          <h3 class="confirm__title">{{ t('home.confirm.title') }}</h3>
-          <p class="confirm__body">{{ t('home.confirm.body') }}</p>
-
-          <GButton
-            v-if="!expired"
-            as="a"
-            :href="confirmation.deepLink"
-            variant="primary"
-            size="lg"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {{ t('home.confirm.cta') }}
-          </GButton>
-          <p v-else class="home__error" role="alert">
-            {{ t('home.confirm.expired') }}
-          </p>
-
-          <p
-            v-if="secondsRemaining !== null && !expired"
-            class="confirm__countdown"
-          >
-            {{ t('home.confirm.expiresIn', { seconds: secondsRemaining }) }}
-          </p>
-
-          <div class="confirm__fallback">
-            <p>{{ t('home.confirm.fallback', { bot: botUsername }) }}</p>
-            <GCodeBlock>/start {{ confirmation.code }}</GCodeBlock>
-            <GButton type="button" variant="ghost" size="sm" @click.stop="onCopyCode">
-              {{ copied ? t('home.confirm.copied') : t('home.confirm.copyCode') }}
-            </GButton>
-          </div>
-        </div>
-      </GCard>
+      </div>
     </section>
 
     <section class="how">
@@ -399,42 +376,154 @@ const lastUpdatedLabel = computed(() => {
   margin: 0;
 }
 
+/* Search-style lookup field with submit/clear icons baked into the box.
+   Replaces the old label + input + button-row layout for a tighter,
+   table-aligned search affordance. */
 .lookup {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
-.lookup__hint {
-  font-size: var(--text-sm);
+.lookup__srlabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.lookup__hint-chip {
-  display: inline-flex;
+.lookup__field {
+  display: flex;
   align-items: center;
-  padding: var(--space-1) var(--space-2);
-  background: var(--color-verified-bg);
-  color: var(--color-verified);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  background: var(--color-bg-surface);
+  border: var(--border-width) solid var(--color-border-strong);
   border-radius: var(--radius-pill);
-  font-weight: var(--weight-medium);
+  transition: border-color var(--duration-fast) var(--ease);
 }
 
-.lookup__hint-plain {
+.lookup__field--focus {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px rgba(168, 90, 28, 0.12);
+}
+
+.lookup__field--error {
+  border-color: var(--color-error);
+}
+
+.lookup__leadIcon {
+  flex-shrink: 0;
   color: var(--color-ink-muted);
 }
 
-.lookup__actions {
-  display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+.lookup__input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  padding: var(--space-2) 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: -0.01em;
+  color: var(--color-ink-strong);
 }
 
-.hero__badges {
+.lookup__input::placeholder {
+  color: var(--color-ink-subtle);
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+}
+
+.lookup__clearBtn,
+.lookup__submitBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid transparent;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.lookup__clearBtn {
+  background: transparent;
+  color: var(--color-ink-muted);
+}
+.lookup__clearBtn:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-ink-strong);
+}
+
+.lookup__submitBtn {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-ink-strong);
+}
+.lookup__submitBtn:hover:not(:disabled) {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-brand-ink);
+}
+.lookup__submitBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.lookup__spin {
+  animation: lookup-spin 700ms linear infinite;
+}
+
+@keyframes lookup-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lookup__inlineError {
+  margin: 0 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-error);
+}
+
+/* Results table ------------------------------------------------------ */
+
+.results {
   display: flex;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.results__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.results__th {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  font-weight: var(--weight-medium);
+  color: var(--color-ink-muted);
+  border-bottom: var(--border-width) solid var(--color-border);
+  font-size: var(--text-sm);
+}
+
+.results__th--actions {
+  text-align: right;
 }
 
 .home__error {
@@ -445,86 +534,6 @@ const lastUpdatedLabel = computed(() => {
   color: var(--color-malicious);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
-}
-
-/* Result ------------------------------------------------------------ */
-
-.result {
-  padding: 0 var(--space-6);
-  margin-bottom: var(--space-10);
-}
-
-.result__card {
-  max-width: var(--width-content);
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
-.result__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.result__title {
-  font-size: var(--text-xl);
-  font-weight: var(--weight-semibold);
-  color: var(--color-ink-strong);
-  margin: 0;
-}
-
-.result__kv {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin: 0;
-}
-
-.result__kv-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.result__kv-row dt {
-  font-size: var(--text-sm);
-  color: var(--color-ink-muted);
-  font-weight: var(--weight-medium);
-}
-
-.result__kv-row dd {
-  margin: 0;
-  color: var(--color-ink-strong);
-}
-
-.result__muted {
-  color: var(--color-ink-muted);
-  font-size: var(--text-sm);
-}
-
-.result__source {
-  margin: 0;
-  padding-top: var(--space-3);
-  border-top: var(--border-width) solid var(--color-border);
-  color: var(--color-ink-muted);
-  font-size: var(--text-sm);
-}
-
-.result__actions {
-  display: flex;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-  padding-top: var(--space-3);
-  border-top: var(--border-width) solid var(--color-border);
-}
-
-.result__cta {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
 }
 
 /* Confirmation expansion ------------------------------------------- */
@@ -629,5 +638,13 @@ const lastUpdatedLabel = computed(() => {
   color: var(--color-ink);
   max-width: 72ch;
   margin: 0;
+}
+
+/* Mobile ------------------------------------------------------------ */
+
+@media (max-width: 640px) {
+  .results__table thead {
+    display: none;
+  }
 }
 </style>

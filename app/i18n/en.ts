@@ -38,9 +38,21 @@ export const en = {
   'home.lookup.submit': 'Look up delegation',
   'home.lookup.checking': 'Checking…',
   'home.lookup.reset': 'Clear',
+  'home.lookup.clearAria': 'Clear address',
   'home.lookup.hint':
     'Tip: connect a wallet to auto-fill this field and watch for account switches.',
   'home.lookup.autofilled': 'Filled from your connected wallet',
+
+  // Table-style results, one row per chain. Only Ethereum mainnet is in
+  // scope today; L2s are tracked in docs/ROADMAP.md.
+  'home.table.chain': 'Chain',
+  'home.table.delegation': 'EIP-7702 Delegation',
+  'home.table.actions': 'Actions',
+  'home.table.notDetected': 'Not Detected',
+  'home.table.checking': 'Checking…',
+  'home.table.awaitingInput': 'Enter an address above',
+  'home.table.alertsMainnetOnly': 'Alerts on mainnet only',
+  'home.chain.ethereumMainnet': 'Ethereum Mainnet',
 
   'home.result.title': 'Current delegation',
   'home.result.eoa': 'EOA',
