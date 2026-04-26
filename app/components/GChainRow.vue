@@ -30,6 +30,10 @@ const emit = defineEmits<{
   // Bubbled up so the page can disable the CTA when no delegation is
   // present on mainnet, without needing to peek into row internals.
   (e: 'classified', payload: { chainId: number; result: CheckResponse }): void;
+  // Fired when the user clicks the "Enter an address above" hint in the
+  // idle state — page focuses the lookup input so they can start typing
+  // without scrolling back up.
+  (e: 'focusInput'): void;
 }>();
 
 const api = useWatcherApi();
@@ -123,7 +127,13 @@ const watchVisible = computed(() => status.value.kind === 'classified');
     </td>
     <td class="g-chain-row__cell g-chain-row__cell--status">
       <template v-if="status.kind === 'idle'">
-        <span class="g-chain-row__faint">{{ t('home.table.awaitingInput') }}</span>
+        <button
+          type="button"
+          class="g-chain-row__faint g-chain-row__faintBtn"
+          @click.stop="emit('focusInput')"
+        >
+          {{ t('home.table.awaitingInput') }}
+        </button>
       </template>
       <template v-else-if="status.kind === 'queued' || status.kind === 'checking'">
         <span class="g-chain-row__muted">
@@ -210,6 +220,29 @@ const watchVisible = computed(() => status.value.kind === 'classified');
   color: var(--color-ink-subtle);
   font-style: italic;
   font-size: var(--text-xs);
+}
+
+/* Button variant of the faint hint — strips default <button> chrome and
+   surfaces an underline-on-hover affordance so users learn they can
+   click it to jump up to the lookup input. */
+.g-chain-row__faintBtn {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--color-ink-subtle);
+  font-family: inherit;
+}
+.g-chain-row__faintBtn:hover {
+  color: var(--color-ink-strong);
+  text-decoration-color: var(--color-ink-strong);
+}
+.g-chain-row__faintBtn:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .g-chain-row__faint--right {

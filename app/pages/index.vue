@@ -23,6 +23,9 @@ const { chains, mainnets, testnets } = useChainCatalog();
 
 const inputId = useId();
 const input = ref('');
+// Template ref to the lookup <input> so rows can request focus when the
+// user clicks the "Enter an address above" hint inside an idle row.
+const inputEl = ref<HTMLInputElement | null>(null);
 // The address rows are checking against. Null = "no lookup yet" (every row
 // renders its idle state). Set when the user submits or the wallet connects.
 const checkedAddress = ref<Address | null>(null);
@@ -127,6 +130,17 @@ function onChainClassified(payload: { chainId: number; result: CheckResponse }) 
   chainResults.value = { ...chainResults.value, [payload.chainId]: payload.result };
 }
 
+function focusLookup() {
+  // Smooth-scroll the input into view first — rows live below it, so a
+  // blunt focus() would jump the page. `block: 'center'` lands the field
+  // comfortably in the viewport, then we focus on the next frame so the
+  // browser's caret placement isn't fighting the scroll animation.
+  const el = inputEl.value;
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  requestAnimationFrame(() => el.focus());
+}
+
 // --- Subscribe flow: mints a confirmation code, bot deep-links the user.
 async function onSubscribe() {
   const addr = checkedAddress.value;
@@ -203,6 +217,7 @@ const watchLink = computed(() => {
             <Search class="lookup__leadIcon" :size="18" aria-hidden="true" />
             <input
               :id="inputId"
+              ref="inputEl"
               v-model="input"
               type="text"
               class="lookup__input"
@@ -264,6 +279,7 @@ const watchLink = computed(() => {
                   :watch-link="watchLink"
                   @subscribe="onSubscribe"
                   @classified="onChainClassified"
+                  @focus-input="focusLookup"
                 />
               </tbody>
             </table>
@@ -311,6 +327,7 @@ const watchLink = computed(() => {
                   :watch-link="watchLink"
                   @subscribe="onSubscribe"
                   @classified="onChainClassified"
+                  @focus-input="focusLookup"
                 />
               </tbody>
             </table>
