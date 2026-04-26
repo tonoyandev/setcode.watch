@@ -21,8 +21,8 @@ services:
     environment:
       # Browser talks to the watcher on localhost:8787 directly (no Caddy
       # path-rewrite), so CORS has to allow the app's Nuxt origin.
-      WATCHER_CORS_ORIGIN: http://localhost:3000
-      WATCHER_WEB_BASE_URL: http://localhost:3000
+      WATCHER_CORS_ORIGIN: http://localhost:3001
+      WATCHER_WEB_BASE_URL: http://localhost:3001
 
   app:
     build:
@@ -31,6 +31,6 @@ services:
         # watcher on its own origin, not through Caddy.
         NUXT_PUBLIC_WATCHER_API_URL: http://localhost:8787
     ports:
-      - '3000:3000'
+      - '3001:3000'
     environment:
       NUXT_PUBLIC_WATCHER_API_URL: http://localhost:8787

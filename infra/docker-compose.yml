@@ -59,6 +59,10 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-setcode}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-setcode}
+      # Schema where the indexer writes its onchain tables (delegation_state,
+      # delegation_event, registry_classification_state, on_chain_subscription_state).
+      # Must match `DATABASE_SCHEMA` on the indexer service.
+      WATCHER_PONDER_SCHEMA: ${PONDER_DATABASE_SCHEMA:-indexer}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:?TELEGRAM_BOT_USERNAME is required}
       WATCHER_HTTP_PORT: "8787"
