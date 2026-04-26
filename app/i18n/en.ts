@@ -52,6 +52,8 @@ export const en = {
   'home.table.checking': 'Checking…',
   'home.table.awaitingInput': 'Enter an address above',
   'home.table.alertsMainnetOnly': 'Alerts on mainnet only',
+  'home.table.mainnetsHeading': 'Mainnets',
+  'home.table.testnetsHeading': 'Testnets',
   'home.chain.ethereumMainnet': 'Ethereum Mainnet',
 
   'home.result.title': 'Current delegation',

@@ -19,7 +19,7 @@ const wallet = useWallet();
 const config = useRuntimeConfig();
 const botUsername = config.public.botUsername;
 
-const { chains } = useChainCatalog();
+const { chains, mainnets, testnets } = useChainCatalog();
 
 const inputId = useId();
 const input = ref('');
@@ -233,33 +233,36 @@ const watchLink = computed(() => {
         </form>
 
         <div class="results">
-          <table class="results__table">
-            <thead>
-              <tr>
-                <th class="results__th results__th--chain">
-                  {{ t('home.table.chain') }}
-                </th>
-                <th class="results__th">
-                  {{ t('home.table.delegation') }}
-                </th>
-                <th class="results__th results__th--actions">
-                  {{ t('home.table.actions') }}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <GChainRow
-                v-for="chain in chains"
-                :key="chain.id"
-                :chain="chain"
-                :address="checkedAddress"
-                :subscribing="subscribing"
-                :watch-link="watchLink"
-                @subscribe="onSubscribe"
-                @classified="onChainClassified"
-              />
-            </tbody>
-          </table>
+          <section class="results__group">
+            <h2 class="results__heading">{{ t('home.table.mainnetsHeading') }}</h2>
+            <table class="results__table">
+              <thead>
+                <tr>
+                  <th class="results__th results__th--chain">
+                    {{ t('home.table.chain') }}
+                  </th>
+                  <th class="results__th">
+                    {{ t('home.table.delegation') }}
+                  </th>
+                  <th class="results__th results__th--actions">
+                    {{ t('home.table.actions') }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <GChainRow
+                  v-for="chain in mainnets"
+                  :key="chain.id"
+                  :chain="chain"
+                  :address="checkedAddress"
+                  :subscribing="subscribing"
+                  :watch-link="watchLink"
+                  @subscribe="onSubscribe"
+                  @classified="onChainClassified"
+                />
+              </tbody>
+            </table>
+          </section>
 
           <p v-if="subscribeError" class="home__error" role="alert">
             {{ subscribeError }}
@@ -327,6 +330,39 @@ const watchLink = computed(() => {
       <div class="why__inner">
         <h2 class="why__title">{{ t('landing.why.title') }}</h2>
         <p class="why__body">{{ t('landing.why.body') }}</p>
+      </div>
+    </section>
+
+    <section class="testnets">
+      <div class="testnets__inner">
+        <h2 class="testnets__title">{{ t('home.table.testnetsHeading') }}</h2>
+        <table class="results__table">
+          <thead>
+            <tr>
+              <th class="results__th results__th--chain">
+                {{ t('home.table.chain') }}
+              </th>
+              <th class="results__th">
+                {{ t('home.table.delegation') }}
+              </th>
+              <th class="results__th results__th--actions">
+                {{ t('home.table.actions') }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <GChainRow
+              v-for="chain in testnets"
+              :key="chain.id"
+              :chain="chain"
+              :address="checkedAddress"
+              :subscribing="subscribing"
+              :watch-link="watchLink"
+              @subscribe="onSubscribe"
+              @classified="onChainClassified"
+            />
+          </tbody>
+        </table>
       </div>
     </section>
   </div>
@@ -507,6 +543,20 @@ const watchLink = computed(() => {
   margin-top: var(--space-3);
 }
 
+.results__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.results__heading {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--color-ink-strong);
+  letter-spacing: -0.01em;
+}
+
 .results__table {
   width: 100%;
   border-collapse: collapse;
@@ -638,6 +688,26 @@ const watchLink = computed(() => {
   color: var(--color-ink);
   max-width: 72ch;
   margin: 0;
+}
+
+/* Testnets section (page bottom) ------------------------------------ */
+
+.testnets {
+  padding: var(--space-12) var(--space-6) var(--space-16);
+}
+
+.testnets__inner {
+  max-width: var(--width-content);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.testnets__title {
+  margin: 0;
+  font-size: var(--text-xl);
+  color: var(--color-ink-strong);
 }
 
 /* Mobile ------------------------------------------------------------ */
