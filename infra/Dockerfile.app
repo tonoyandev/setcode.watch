@@ -9,7 +9,7 @@
 # the runtime env in compose in sync or SSR and the browser will disagree.
 
 # ---------- deps ----------
-FROM node:22-alpine AS deps
+FROM node:25-alpine AS deps
 # Native build tools for node-gyp (utf-8-validate, keccak, etc).
 RUN apk add --no-cache python3 make g++
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
@@ -45,7 +45,7 @@ RUN pnpm --filter=@setcode/app build
 # Nitro's node-server output is self-contained: no node_modules traversal at
 # runtime, just `node .output/server/index.mjs`. Ship the bundle in a clean
 # image without pnpm or dev deps.
-FROM node:22-alpine AS runner
+FROM node:25-alpine AS runner
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 
