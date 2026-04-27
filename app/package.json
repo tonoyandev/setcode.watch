@@ -22,7 +22,7 @@
     "@wagmi/connectors": "^5.11",
     "@wagmi/core": "^2.22",
     "@wagmi/vue": "^0.2",
-    "lucide-vue-next": "0.471.0",
+    "lucide-vue-next": "1.0.0",
     "nuxt": "3.21.2",
     "viem": "^2.21.45",
     "vue": "3.5.13",
