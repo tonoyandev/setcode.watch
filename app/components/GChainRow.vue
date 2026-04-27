@@ -15,18 +15,20 @@ interface Props {
   chain: ChainMeta;
   // null means "no address entered yet" — row stays in idle state.
   address: Address | null;
-  // Mainnet row exposes Subscribe/Watch CTAs in the actions cell.
-  // Other chains hide them entirely (the bot only handles mainnet alerts).
+  // Monitored chains expose Subscribe/Watch CTAs in the actions cell.
+  // Unmonitored chains hide them entirely — we have no indexer for those
+  // so subscribing would never deliver alerts.
   subscribing?: boolean;
-  watchLink?: string;
 }
 const props = withDefaults(defineProps<Props>(), {
   subscribing: false,
-  watchLink: '',
 });
 
 const emit = defineEmits<{
-  (e: 'subscribe'): void;
+  // Subscribe carries chainId so the page can mint a confirmation scoped
+  // to the right chain (multi-chain support — each row's CTA targets its
+  // own chain, not just mainnet).
+  (e: 'subscribe', payload: { chainId: number }): void;
   // Bubbled up so the page can disable the CTA when no delegation is
   // present on mainnet, without needing to peek into row internals.
   (e: 'classified', payload: { chainId: number; result: CheckResponse }): void;
@@ -37,6 +39,8 @@ const emit = defineEmits<{
 }>();
 
 const api = useWatcherApi();
+const config = useRuntimeConfig();
+const botUsername = config.public.botUsername;
 const rowEl = ref<HTMLTableRowElement | null>(null);
 const { hasBeenInView } = useInView(rowEl);
 
@@ -64,7 +68,7 @@ async function performCheck(addr: Address) {
   }
 
   try {
-    const result = await api.check(addr);
+    const result = await api.check(addr, props.chain.id);
     if (!result.currentTarget) {
       status.value = { kind: 'notDetected' };
       return;
@@ -113,10 +117,19 @@ watch(
 );
 
 const showActions = computed(() => props.chain.monitored);
-const subscribeDisabled = computed(
-  () => status.value.kind !== 'classified' || props.subscribing,
-);
+const subscribeDisabled = computed(() => status.value.kind !== 'classified' || props.subscribing);
 const watchVisible = computed(() => status.value.kind === 'classified');
+
+// Bot deep-link uses the multi-chain payload format `w_<chainId>_<addr>`.
+// Built per-row so each chain's Watch CTA targets its own chainId; the
+// bot resolves it back via parseWatchPayload(). Empty string until the
+// row has both an address to watch and a classification (matches the
+// previous "Watch" affordance which only appeared after classification).
+const watchLink = computed(() => {
+  const addr = props.address;
+  if (!addr || !watchVisible.value) return '';
+  return `https://t.me/${botUsername}?start=w_${props.chain.id}_${addr}`;
+});
 </script>
 
 <template>
@@ -159,7 +172,7 @@ const watchVisible = computed(() => status.value.kind === 'classified');
           variant="primary"
           :disabled="subscribeDisabled"
           :loading="subscribing ?? false"
-          @click.stop="emit('subscribe')"
+          @click.stop="emit('subscribe', { chainId: chain.id })"
         >
           {{ t('home.cta.subscribe') }}
         </GButton>
@@ -176,7 +189,7 @@ const watchVisible = computed(() => status.value.kind === 'classified');
         </GButton>
       </div>
       <span v-else class="g-chain-row__faint g-chain-row__faint--right">
-        {{ t('home.table.alertsMainnetOnly') }}
+        {{ t('home.table.alertsUnsupported') }}
       </span>
     </td>
   </tr>

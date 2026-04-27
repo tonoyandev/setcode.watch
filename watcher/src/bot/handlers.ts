@@ -1,3 +1,4 @@
+import { CHAIN_ID_MAINNET, SUPPORTED_CHAINS, getChainById } from '@setcode/shared';
 import { type Address, isAddress } from 'viem';
 import { t } from '../i18n/index.js';
 import { normaliseEoa } from '../lib/address.js';
@@ -10,6 +11,25 @@ import {
 import type { CheckService } from '../services/check.js';
 import type { ConfirmationsService } from '../services/confirmations.js';
 import type { ManageService } from '../services/manage.js';
+
+function chainLabel(chainId: number): string {
+  return getChainById(chainId)?.name ?? `chain ${chainId}`;
+}
+
+function resolveChainShortName(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const needle = raw.toLowerCase();
+  const hit = SUPPORTED_CHAINS.find((c) => c.shortName.toLowerCase() === needle);
+  return hit?.id ?? null;
+}
+
+function formatSubscriptionLine(eoa: string, chainId: number): string {
+  // Mainnet rows omit the chain suffix to match the legacy display
+  // (subscribers from before this change all default to chain 1, so the
+  // chain prefix would be visual noise on the common path).
+  if (chainId === CHAIN_ID_MAINNET) return `• ${eoa}`;
+  return `• ${eoa} (${chainLabel(chainId)})`;
+}
 
 export interface StartInput {
   payload: string | undefined;
@@ -47,9 +67,19 @@ export async function handleStart(
     });
     switch (result.kind) {
       case 'ok':
-        return { reply: t('confirm.success', { eoa: result.eoa }) };
+        return {
+          reply: t('confirm.success', {
+            eoa: result.eoa,
+            chain: chainLabel(result.chainId),
+          }),
+        };
       case 'already_subscribed':
-        return { reply: t('confirm.alreadySubscribed', { eoa: result.eoa }) };
+        return {
+          reply: t('confirm.alreadySubscribed', {
+            eoa: result.eoa,
+            chain: chainLabel(result.chainId),
+          }),
+        };
       case 'cap_reached':
         return { reply: t('confirm.capReached', { max: result.max }) };
       case 'expired':
@@ -61,9 +91,9 @@ export async function handleStart(
 
   if (payload.startsWith(WATCH_PAYLOAD_PREFIX)) {
     const body = parseWatchPayload(payload);
-    if (!body || !isAddress(body)) return { reply: t('welcome.unknownPayload') };
-    const eoa = body as Address;
-    const result = await check.check(eoa);
+    if (!body || !isAddress(body.address)) return { reply: t('welcome.unknownPayload') };
+    const eoa = body.address as Address;
+    const result = await check.check(eoa, body.chainId);
     const targetLine =
       result.currentTarget === null
         ? t('watch.noDelegation')
@@ -77,6 +107,7 @@ export async function handleStart(
     return {
       reply: t('watch.reply', {
         eoa,
+        chain: chainLabel(body.chainId),
         classification: classificationLabel,
         target: targetLine,
       }),
@@ -97,7 +128,7 @@ export async function handleList(
   const rows = await service.list(input.chatId);
   if (rows.length === 0) return { reply: t('list.empty') };
   const header = t('list.header', { count: rows.length });
-  const body = rows.map((r) => `• ${r.eoa}`).join('\n');
+  const body = rows.map((r) => formatSubscriptionLine(r.eoa, r.chainId)).join('\n');
   return { reply: `${header}\n${body}` };
 }
 
@@ -113,12 +144,22 @@ export async function handleRemove(
   service: ConfirmationsService,
   input: CommandInput,
 ): Promise<HandlerReply> {
-  const arg = input.args.trim();
-  if (!arg) return { reply: t('remove.usage') };
-  const addr: Address | null = normaliseEoa(arg);
+  const args = input.args.trim().split(/\s+/).filter(Boolean);
+  const [rawAddr, rawChain] = args;
+  if (!rawAddr) return { reply: t('remove.usage') };
+  const addr: Address | null = normaliseEoa(rawAddr);
   if (!addr) return { reply: t('remove.invalidEoa') };
-  const removed = await service.remove({ eoa: addr, chatId: input.chatId });
+
+  // Second arg is the chain shortName from SUPPORTED_CHAINS (e.g. `base`,
+  // `op`, `arb1`, `eth`). Omitted → mainnet, matching the pre-multi-chain
+  // shorthand. Unknown short names fall back to mainnet rather than
+  // erroring so users don't get tripped up by capitalisation; the lookup
+  // miss simply won't match any row and reports "not subscribed".
+  const chainId = resolveChainShortName(rawChain) ?? CHAIN_ID_MAINNET;
+  const removed = await service.remove({ eoa: addr, chainId, chatId: input.chatId });
   return {
-    reply: removed ? t('remove.success', { eoa: addr }) : t('remove.notFound', { eoa: addr }),
+    reply: removed
+      ? t('remove.success', { eoa: addr, chain: chainLabel(chainId) })
+      : t('remove.notFound', { eoa: addr, chain: chainLabel(chainId) }),
   };
 }

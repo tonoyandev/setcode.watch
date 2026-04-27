@@ -67,6 +67,7 @@ export function createManageService(db: Db, options: ManageServiceOptions) {
     const rows = await db
       .select({
         eoa: schema.subscriptions.eoa,
+        chainId: schema.subscriptions.chainId,
         confirmedAt: schema.subscriptions.confirmedAt,
       })
       .from(schema.subscriptions)
@@ -77,12 +78,18 @@ export function createManageService(db: Db, options: ManageServiceOptions) {
         ),
       );
     const subscriptions = rows
-      .filter((r): r is { eoa: string; confirmedAt: Date } => r.confirmedAt !== null)
-      .map((r) => ({ eoa: r.eoa as Address, confirmedAt: r.confirmedAt }));
+      .filter(
+        (r): r is { eoa: string; chainId: number; confirmedAt: Date } => r.confirmedAt !== null,
+      )
+      .map((r) => ({ eoa: r.eoa as Address, chainId: r.chainId, confirmedAt: r.confirmedAt }));
     return { kind: 'ok', chatId, subscriptions };
   }
 
-  async function removeSubscription(token: string, eoa: Address): Promise<ManageRemoveResult> {
+  async function removeSubscription(
+    token: string,
+    eoa: Address,
+    chainId: number,
+  ): Promise<ManageRemoveResult> {
     const chatId = await resolve(token);
     if (chatId === null) return { kind: 'not_found' };
     const deleted = await db
@@ -90,6 +97,7 @@ export function createManageService(db: Db, options: ManageServiceOptions) {
       .where(
         and(
           eq(schema.subscriptions.eoa, eoa),
+          eq(schema.subscriptions.chainId, chainId),
           eq(schema.subscriptions.telegramChatId, chatId),
           eq(schema.subscriptions.confirmed, true),
         ),

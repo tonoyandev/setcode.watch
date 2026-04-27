@@ -75,8 +75,8 @@ describe('handleStart', () => {
 
   it('forwards a valid c_ code to the service and formats each result', async () => {
     const results = [
-      { kind: 'ok', eoa: ADDR } as const,
-      { kind: 'already_subscribed', eoa: ADDR } as const,
+      { kind: 'ok', eoa: ADDR, chainId: 1 } as const,
+      { kind: 'already_subscribed', eoa: ADDR, chainId: 1 } as const,
       { kind: 'cap_reached', max: 10 } as const,
       { kind: 'expired' } as const,
       { kind: 'not_found' } as const,
@@ -128,10 +128,45 @@ describe('handleStart', () => {
       username: null,
     });
 
-    expect(check.check).toHaveBeenCalledWith(ADDR);
+    expect(check.check).toHaveBeenCalledWith(ADDR, 1);
     expect(reply).toMatch(new RegExp(ADDR));
     expect(reply).toMatch(new RegExp(TARGET));
     expect(reply).toMatch(/Malicious/);
+  });
+
+  it('routes a w_<chainId>_<addr> payload to the right chain', async () => {
+    const service = makeService({});
+    const check = makeCheck({
+      check: vi.fn().mockResolvedValue({
+        eoa: ADDR,
+        chainId: 8453,
+        currentTarget: TARGET,
+        classification: 'verified',
+        source: 'registry',
+        lastUpdated: 1000,
+      }),
+    });
+
+    const { reply } = await handleStart(service, check, {
+      payload: `w_8453_${ADDR}`,
+      chatId: 1n,
+      username: null,
+    });
+
+    expect(check.check).toHaveBeenCalledWith(ADDR, 8453);
+    expect(reply).toMatch(/Base/);
+  });
+
+  it('rejects a w_ payload that targets an unsupported chain', async () => {
+    const service = makeService({});
+    const check = makeCheck();
+    const { reply } = await handleStart(service, check, {
+      payload: `w_99999_${ADDR}`,
+      chatId: 1n,
+      username: null,
+    });
+    expect(reply).toMatch(/don't recognise that start parameter/);
+    expect(check.check).not.toHaveBeenCalled();
   });
 
   it('rejects a malformed w_ payload', async () => {
@@ -167,11 +202,25 @@ describe('handleList', () => {
     const service = makeService({
       list: vi
         .fn()
-        .mockResolvedValue([{ eoa: ADDR, confirmedAt: new Date('2026-04-21T10:00:00Z') }]),
+        .mockResolvedValue([
+          { eoa: ADDR, chainId: 1, confirmedAt: new Date('2026-04-21T10:00:00Z') },
+        ]),
     });
     const { reply } = await handleList(service, { chatId: 1n, args: '' });
     expect(reply).toMatch(/watching 1 address/);
     expect(reply).toMatch(`• ${ADDR}`);
+  });
+
+  it('annotates non-mainnet rows with the chain name', async () => {
+    const service = makeService({
+      list: vi.fn().mockResolvedValue([
+        { eoa: ADDR, chainId: 1, confirmedAt: new Date('2026-04-21T10:00:00Z') },
+        { eoa: ADDR, chainId: 8453, confirmedAt: new Date('2026-04-21T10:00:00Z') },
+      ]),
+    });
+    const { reply } = await handleList(service, { chatId: 1n, args: '' });
+    expect(reply).toMatch(`• ${ADDR}\n`); // mainnet line, no suffix
+    expect(reply).toMatch(`• ${ADDR} (Base)`);
   });
 });
 
@@ -193,7 +242,7 @@ describe('handleRemove', () => {
     const service = makeService({ remove });
     const { reply } = await handleRemove(service, { chatId: 1n, args: ADDR });
     expect(reply).toMatch(/Unsubscribed/);
-    expect(remove).toHaveBeenCalledWith({ eoa: ADDR, chatId: 1n });
+    expect(remove).toHaveBeenCalledWith({ eoa: ADDR, chainId: 1, chatId: 1n });
   });
 
   it('lower-cases a mixed-case EOA before calling the service', async () => {
@@ -202,7 +251,16 @@ describe('handleRemove', () => {
     const mixed = '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
     const { reply } = await handleRemove(service, { chatId: 1n, args: mixed });
     expect(reply).toMatch(/were not subscribed/);
-    expect(remove).toHaveBeenCalledWith({ eoa: ADDR, chatId: 1n });
+    expect(remove).toHaveBeenCalledWith({ eoa: ADDR, chainId: 1, chatId: 1n });
+  });
+
+  it('routes a chain shortName second arg to the right chain', async () => {
+    const remove = vi.fn().mockResolvedValue(true);
+    const service = makeService({ remove });
+    const { reply } = await handleRemove(service, { chatId: 1n, args: `${ADDR} base` });
+    expect(reply).toMatch(/Unsubscribed/);
+    expect(reply).toMatch(/Base/);
+    expect(remove).toHaveBeenCalledWith({ eoa: ADDR, chainId: 8453, chatId: 1n });
   });
 });
 

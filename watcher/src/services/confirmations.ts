@@ -18,26 +18,31 @@ export interface CreatePendingResult {
 }
 
 export type ConfirmResult =
-  | { kind: 'ok'; eoa: Address }
-  | { kind: 'already_subscribed'; eoa: Address }
+  | { kind: 'ok'; eoa: Address; chainId: number }
+  | { kind: 'already_subscribed'; eoa: Address; chainId: number }
   | { kind: 'cap_reached'; max: number }
   | { kind: 'expired' }
   | { kind: 'not_found' };
 
 export interface SubscriptionSummary {
   eoa: Address;
+  chainId: number;
   confirmedAt: Date;
 }
 
 export function createConfirmationsService(db: WatcherDb, options: ConfirmationsServiceOptions) {
   const now = options.now ?? (() => new Date());
 
-  async function createPending(input: { eoa: Address }): Promise<CreatePendingResult> {
+  async function createPending(input: {
+    eoa: Address;
+    chainId: number;
+  }): Promise<CreatePendingResult> {
     const expiresAt = new Date(now().getTime() + options.confirmationTtlSeconds * 1000);
     const code = newConfirmationCode();
     await db.insert(schema.pendingConfirmations).values({
       code,
       eoa: input.eoa,
+      chainId: input.chainId,
       expiresAt,
     });
     return { code, expiresAt };
@@ -64,13 +69,18 @@ export function createConfirmationsService(db: WatcherDb, options: Confirmations
     }
 
     const eoa = pending.eoa as Address;
+    const chainId = pending.chainId;
 
+    // Per-chain identity: a (eoa, chainId, chatId) tuple is what makes a
+    // subscription unique. The same EOA on Ethereum and Base under the
+    // same chat are two distinct rows, each generating its own alerts.
     const [existing] = await db
       .select()
       .from(schema.subscriptions)
       .where(
         and(
           eq(schema.subscriptions.eoa, eoa),
+          eq(schema.subscriptions.chainId, chainId),
           eq(schema.subscriptions.telegramChatId, input.chatId),
         ),
       )
@@ -80,9 +90,12 @@ export function createConfirmationsService(db: WatcherDb, options: Confirmations
       await db
         .delete(schema.pendingConfirmations)
         .where(eq(schema.pendingConfirmations.code, input.code));
-      return { kind: 'already_subscribed', eoa };
+      return { kind: 'already_subscribed', eoa, chainId };
     }
 
+    // Cap counts confirmed subscriptions across all chains for this chat.
+    // We don't want a user to bypass the cap by subscribing to the same
+    // EOA on every supported chain.
     const confirmed = await db
       .select({ id: schema.subscriptions.id })
       .from(schema.subscriptions)
@@ -109,6 +122,7 @@ export function createConfirmationsService(db: WatcherDb, options: Confirmations
     } else {
       await db.insert(schema.subscriptions).values({
         eoa,
+        chainId,
         telegramChatId: input.chatId,
         telegramUsername: input.username,
         confirmed: true,
@@ -120,13 +134,14 @@ export function createConfirmationsService(db: WatcherDb, options: Confirmations
       .delete(schema.pendingConfirmations)
       .where(eq(schema.pendingConfirmations.code, input.code));
 
-    return { kind: 'ok', eoa };
+    return { kind: 'ok', eoa, chainId };
   }
 
   async function list(chatId: bigint): Promise<SubscriptionSummary[]> {
     const rows = await db
       .select({
         eoa: schema.subscriptions.eoa,
+        chainId: schema.subscriptions.chainId,
         confirmedAt: schema.subscriptions.confirmedAt,
       })
       .from(schema.subscriptions)
@@ -137,16 +152,23 @@ export function createConfirmationsService(db: WatcherDb, options: Confirmations
         ),
       );
     return rows
-      .filter((r): r is { eoa: string; confirmedAt: Date } => r.confirmedAt !== null)
-      .map((r) => ({ eoa: r.eoa as Address, confirmedAt: r.confirmedAt }));
+      .filter(
+        (r): r is { eoa: string; chainId: number; confirmedAt: Date } => r.confirmedAt !== null,
+      )
+      .map((r) => ({ eoa: r.eoa as Address, chainId: r.chainId, confirmedAt: r.confirmedAt }));
   }
 
-  async function remove(input: { eoa: Address; chatId: bigint }): Promise<boolean> {
+  async function remove(input: {
+    eoa: Address;
+    chainId: number;
+    chatId: bigint;
+  }): Promise<boolean> {
     const deleted = await db
       .delete(schema.subscriptions)
       .where(
         and(
           eq(schema.subscriptions.eoa, input.eoa),
+          eq(schema.subscriptions.chainId, input.chainId),
           eq(schema.subscriptions.telegramChatId, input.chatId),
           eq(schema.subscriptions.confirmed, true),
         ),

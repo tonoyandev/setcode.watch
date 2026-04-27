@@ -81,7 +81,39 @@ describe('HTTP API', () => {
     expect(body.expiresAt).toBe('2026-04-21T10:05:00.000Z');
     expect(createPending).toHaveBeenCalledWith({
       eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      chainId: 1,
     });
+  });
+
+  it('POST /confirmations forwards an explicit chainId from the body', async () => {
+    const createPending = vi.fn().mockResolvedValue({
+      code: 'c_abcdefghijklmnop',
+      expiresAt: new Date('2026-04-21T10:05:00Z'),
+    });
+    const { app } = makeApp({ createPending });
+    const res = await app.request('/confirmations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', chainId: 8453 }),
+    });
+    expect(res.status).toBe(200);
+    expect(createPending).toHaveBeenCalledWith({
+      eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      chainId: 8453,
+    });
+  });
+
+  it('POST /confirmations rejects an unsupported chainId', async () => {
+    const createPending = vi.fn();
+    const { app } = makeApp({ createPending });
+    const res = await app.request('/confirmations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', chainId: 99999 }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'unsupported_chain' });
+    expect(createPending).not.toHaveBeenCalled();
   });
 
   it('POST /confirmations rejects invalid JSON', async () => {
@@ -143,7 +175,26 @@ describe('HTTP API', () => {
       source: 'registry',
       lastUpdated: 1700000000,
     });
-    expect(check).toHaveBeenCalledWith('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(check).toHaveBeenCalledWith('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1);
+  });
+
+  it('POST /check forwards an explicit chainId to the service', async () => {
+    const check = vi.fn().mockResolvedValue({
+      eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      chainId: 8453,
+      currentTarget: null,
+      classification: 'unknown',
+      source: 'unknown',
+      lastUpdated: null,
+    });
+    const { app } = makeApp({}, { check });
+    const res = await app.request('/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', chainId: 8453 }),
+    });
+    expect(res.status).toBe(200);
+    expect(check).toHaveBeenCalledWith('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 8453);
   });
 
   it('GET /manage/:token returns the chat subscriptions on happy path', async () => {
@@ -153,6 +204,7 @@ describe('HTTP API', () => {
       subscriptions: [
         {
           eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          chainId: 1,
           confirmedAt: new Date('2026-04-21T10:00:00Z'),
         },
       ],
@@ -164,6 +216,7 @@ describe('HTTP API', () => {
       subscriptions: [
         {
           eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          chainId: 1,
           confirmedAt: '2026-04-21T10:00:00.000Z',
         },
       ],
@@ -198,6 +251,7 @@ describe('HTTP API', () => {
     expect(removeSubscription).toHaveBeenCalledWith(
       'abcdefgh12345678',
       '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      1,
     );
   });
 

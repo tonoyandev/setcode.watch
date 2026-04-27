@@ -26,6 +26,7 @@ export interface CheckResponse {
 // server.ts changes.
 export interface ManageSubscription {
   eoa: Address;
+  chainId: number;
   confirmedAt: string;
 }
 export interface ManageListResponse {
@@ -57,6 +58,7 @@ export type WatcherApiError =
   | { kind: 'invalid_eoa' }
   | { kind: 'invalid_token' }
   | { kind: 'invalid_query' }
+  | { kind: 'unsupported_chain' }
   | { kind: 'not_found' }
   | { kind: 'network' }
   | { kind: 'unknown'; status: number };
@@ -69,10 +71,10 @@ export class WatcherApiException extends Error {
 }
 
 interface WatcherApiClient {
-  createConfirmation(eoa: Address): Promise<CreateConfirmationResponse>;
-  check(eoa: Address): Promise<CheckResponse>;
+  createConfirmation(eoa: Address, chainId: number): Promise<CreateConfirmationResponse>;
+  check(eoa: Address, chainId: number): Promise<CheckResponse>;
   listManage(token: string): Promise<ManageListResponse>;
-  removeManage(token: string, eoa: Address): Promise<ManageRemoveResponse>;
+  removeManage(token: string, eoa: Address, chainId: number): Promise<ManageRemoveResponse>;
   listRegistry(input?: {
     classification?: Classification;
     cursor?: number;
@@ -88,12 +90,15 @@ export function useWatcherApi(): WatcherApiClient {
   const config = useRuntimeConfig();
   const baseUrl = config.public.watcherApiUrl;
 
-  async function createConfirmation(eoa: Address): Promise<CreateConfirmationResponse> {
+  async function createConfirmation(
+    eoa: Address,
+    chainId: number,
+  ): Promise<CreateConfirmationResponse> {
     try {
       const response = await $fetch<CreateConfirmationResponse>('/confirmations', {
         baseURL: baseUrl,
         method: 'POST',
-        body: { eoa },
+        body: { eoa, chainId },
       });
       return response;
     } catch (err: unknown) {
@@ -101,12 +106,12 @@ export function useWatcherApi(): WatcherApiClient {
     }
   }
 
-  async function check(eoa: Address): Promise<CheckResponse> {
+  async function check(eoa: Address, chainId: number): Promise<CheckResponse> {
     try {
       return await $fetch<CheckResponse>('/check', {
         baseURL: baseUrl,
         method: 'POST',
-        body: { eoa },
+        body: { eoa, chainId },
       });
     } catch (err: unknown) {
       throw new WatcherApiException(mapError(err));
@@ -124,12 +129,16 @@ export function useWatcherApi(): WatcherApiClient {
     }
   }
 
-  async function removeManage(token: string, eoa: Address): Promise<ManageRemoveResponse> {
+  async function removeManage(
+    token: string,
+    eoa: Address,
+    chainId: number,
+  ): Promise<ManageRemoveResponse> {
     try {
       return await $fetch<ManageRemoveResponse>(`/manage/${token}/remove`, {
         baseURL: baseUrl,
         method: 'POST',
-        body: { eoa },
+        body: { eoa, chainId },
       });
     } catch (err: unknown) {
       throw new WatcherApiException(mapError(err));
@@ -184,6 +193,7 @@ export function mapError(err: unknown): WatcherApiError {
     code === 'invalid_eoa' ||
     code === 'invalid_token' ||
     code === 'invalid_query' ||
+    code === 'unsupported_chain' ||
     code === 'not_found'
   ) {
     return { kind: code };

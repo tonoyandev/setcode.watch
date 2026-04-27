@@ -22,20 +22,23 @@ export interface CheckResult {
 }
 
 export interface CheckServiceOptions {
-  chainId: number;
   classification: ClassificationService;
 }
 
 export interface CheckService {
-  check(eoa: Address): Promise<CheckResult>;
+  // chainId is per-call now (was per-service): one CheckService instance
+  // serves all monitored chains. Callers (HTTP /check, bot watch flow)
+  // are responsible for validating that chainId is in SUPPORTED_CHAIN_IDS
+  // before reaching this layer.
+  check(eoa: Address, chainId: number): Promise<CheckResult>;
 }
 
-// Read-only: looks up the indexer's delegation_state for the EOA, resolves
-// the target through the classification service, and annotates the caller
-// with where the answer came from. No writes, no persistence. Safe to call
-// as often as the rate-limiter allows.
+// Read-only: looks up the indexer's delegation_state for the (EOA, chainId)
+// pair, resolves the target through the classification service, and
+// annotates the caller with where the answer came from. No writes, no
+// persistence. Safe to call as often as the rate-limiter allows.
 export function createCheckService(db: Db, options: CheckServiceOptions): CheckService {
-  async function check(eoa: Address): Promise<CheckResult> {
+  async function check(eoa: Address, chainId: number): Promise<CheckResult> {
     const lower = eoa.toLowerCase() as Address;
 
     const [row] = await db
@@ -44,13 +47,13 @@ export function createCheckService(db: Db, options: CheckServiceOptions): CheckS
         lastUpdated: delegationState.lastUpdated,
       })
       .from(delegationState)
-      .where(and(eq(delegationState.eoa, lower), eq(delegationState.chainId, options.chainId)))
+      .where(and(eq(delegationState.eoa, lower), eq(delegationState.chainId, chainId)))
       .limit(1);
 
     if (!row || row.currentTarget === null) {
       return {
         eoa: lower,
-        chainId: options.chainId,
+        chainId,
         currentTarget: null,
         classification: 'unknown',
         source: 'unknown',
@@ -73,7 +76,7 @@ export function createCheckService(db: Db, options: CheckServiceOptions): CheckS
 
     return {
       eoa: lower,
-      chainId: options.chainId,
+      chainId,
       currentTarget: target,
       classification,
       source,

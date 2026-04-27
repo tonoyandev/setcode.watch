@@ -1,6 +1,5 @@
 import { ponder } from 'ponder:registry';
 import { delegationEvent, delegationState } from 'ponder:schema';
-import { CHAIN_ID_MAINNET } from '@setcode/shared';
 import type { Address, Hex } from 'viem';
 import { type RawAuthorization, recoverAuthorizingEoa } from '../lib/authorization.js';
 import { authorizationTargetToDelegation } from '../lib/delegation.js';
@@ -36,6 +35,11 @@ function toBigInt(value: number | bigint | Hex): bigint {
 
 ponder.on('DelegationScanner:block', async ({ event, context }) => {
   const blockNumber = event.block.number;
+  // The same handler runs once per monitored chain — context.chain.id
+  // tells us which one fired. We persist it on every event/state row so
+  // downstream queries (watcher dispatcher, /check endpoint) can scope
+  // to the chain the user actually subscribed against.
+  const chainId = context.chain.id;
 
   // Ponder's stripped Block type does not carry authorizationList for EIP-7702
   // transactions. Re-fetch the block via viem so we have access to the full
@@ -67,7 +71,7 @@ ponder.on('DelegationScanner:block', async ({ event, context }) => {
 
       const prev = await context.db.find(delegationState, {
         eoa: signer,
-        chainId: CHAIN_ID_MAINNET,
+        chainId: chainId,
       });
       const previousTarget = prev?.currentTarget ?? null;
 
@@ -76,7 +80,7 @@ ponder.on('DelegationScanner:block', async ({ event, context }) => {
         eoa: signer,
         previousTarget,
         newTarget,
-        chainId: CHAIN_ID_MAINNET,
+        chainId: chainId,
         blockNumber,
         timestamp: event.block.timestamp,
         txHash: tx.hash,
@@ -86,7 +90,7 @@ ponder.on('DelegationScanner:block', async ({ event, context }) => {
         .insert(delegationState)
         .values({
           eoa: signer,
-          chainId: CHAIN_ID_MAINNET,
+          chainId: chainId,
           currentTarget: newTarget,
           lastUpdated: event.block.timestamp,
         })

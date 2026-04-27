@@ -1,38 +1,55 @@
+import type { ChainConfig } from '@setcode/shared';
 import type { Address } from 'viem';
 import { isAddress } from 'viem';
 
-const MIN_START_BLOCK = 22_000_000;
+// Floor used to defend against accidentally indexing the entire chain
+// history. Pectra activated at ~22.4M on Ethereum; the L2 equivalents
+// landed at much higher block numbers, so a single floor of 1 is the
+// only value that's safe across all monitored chains. We delegate the
+// actual "did you set this sensibly?" judgment to the operator —
+// startBlock comes from infra/.env per chain.
+const MIN_START_BLOCK = 1;
 
-export function requireStartBlock(): number {
-  const raw = process.env.PONDER_START_BLOCK;
+export function requireStartBlockFor(chain: ChainConfig): number {
+  const raw = process.env[chain.startBlockEnvKey];
   if (!raw) {
     throw new Error(
       [
-        'PONDER_START_BLOCK is required but not set.',
+        `${chain.startBlockEnvKey} is required but not set.`,
         '',
-        'For Ethereum mainnet use the Pectra activation block.',
-        'Verify the exact value before setting, for example via:',
-        '  https://etherscan.io/block/22431084',
-        '',
-        'Set it in your .env file: PONDER_START_BLOCK=22431084',
+        `Set the ${chain.name} start block to the Pectra-equivalent activation`,
+        'block (or later) so the indexer skips pre-EIP-7702 history. Example:',
+        `  ${chain.startBlockEnvKey}=22431084`,
       ].join('\n'),
     );
   }
   const n = Number(raw);
   if (!Number.isInteger(n) || n < MIN_START_BLOCK) {
     throw new Error(
-      `PONDER_START_BLOCK=${raw} is invalid. Must be an integer >= ${MIN_START_BLOCK} (Pectra era).`,
+      `${chain.startBlockEnvKey}=${raw} is invalid. Must be an integer >= ${MIN_START_BLOCK}.`,
     );
   }
   return n;
 }
 
-export function requireRpcUrl(): string {
-  const url = process.env.ETH_RPC_URL;
+export function requireRpcUrlFor(chain: ChainConfig): string {
+  const url = process.env[chain.rpcEnvKey];
   if (!url) {
-    throw new Error('ETH_RPC_URL is required but not set.');
+    throw new Error(`${chain.rpcEnvKey} is required but not set (RPC URL for ${chain.name}).`);
   }
   return url;
+}
+
+// Optional fallback RPC endpoints — Ponder handles transport-level
+// failover when given a list. We silently drop unset entries so each
+// chain can be configured with 0–N fallbacks independently.
+export function fallbackRpcUrlsFor(chain: ChainConfig): string[] {
+  const urls: string[] = [];
+  for (const key of chain.fallbackRpcEnvKeys) {
+    const url = process.env[key];
+    if (url && url.trim() !== '') urls.push(url);
+  }
+  return urls;
 }
 
 export function optionalAddress(envKey: string): Address | undefined {

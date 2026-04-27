@@ -18,6 +18,9 @@ describe('mapError', () => {
     expect(mapError({ status: 400, data: { error: 'invalid_query' } })).toEqual({
       kind: 'invalid_query',
     });
+    expect(mapError({ status: 400, data: { error: 'unsupported_chain' } })).toEqual({
+      kind: 'unsupported_chain',
+    });
     expect(mapError({ status: 404, data: { error: 'not_found' } })).toEqual({
       kind: 'not_found',
     });

@@ -1,3 +1,4 @@
+import { CHAIN_ID_MAINNET, SUPPORTED_CHAIN_IDS } from '@setcode/shared';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { z } from 'zod';
@@ -18,13 +19,26 @@ export interface HttpServerOptions {
   corsOrigins: string[];
 }
 
+// chainId is optional in the request body; clients that haven't been
+// updated yet (or only care about Ethereum) get mainnet by default. We
+// validate against SUPPORTED_CHAIN_IDS at the boundary so unsupported
+// chains return 400 rather than producing empty rows downstream.
+const chainIdField = z.coerce.number().int().positive().optional();
+
 const createBody = z.object({
   eoa: z.string().min(1),
+  chainId: chainIdField,
 });
 
 const removeBody = z.object({
   eoa: z.string().min(1),
+  chainId: chainIdField,
 });
+
+function resolveChainId(raw: number | undefined): number | null {
+  const id = raw ?? CHAIN_ID_MAINNET;
+  return SUPPORTED_CHAIN_IDS.includes(id) ? id : null;
+}
 const listRegistryQuery = z.object({
   classification: z.enum(['verified', 'unknown', 'malicious']).optional(),
   cursor: z.coerce.number().int().min(0).optional(),
@@ -77,8 +91,10 @@ export function createHttpApp({
     if (!parsed.success) return c.json({ error: 'invalid_body' }, 400);
     const normalised = normaliseEoa(parsed.data.eoa);
     if (!normalised) return c.json({ error: 'invalid_eoa' }, 400);
+    const chainId = resolveChainId(parsed.data.chainId);
+    if (chainId === null) return c.json({ error: 'unsupported_chain' }, 400);
 
-    const { code, expiresAt } = await service.createPending({ eoa: normalised });
+    const { code, expiresAt } = await service.createPending({ eoa: normalised, chainId });
     const deepLink = `https://t.me/${botUsername}?start=${code}`;
     return c.json({
       code,
@@ -95,6 +111,7 @@ export function createHttpApp({
     return c.json({
       subscriptions: lookup.subscriptions.map((s) => ({
         eoa: s.eoa,
+        chainId: s.chainId,
         confirmedAt: s.confirmedAt.toISOString(),
       })),
     });
@@ -113,8 +130,10 @@ export function createHttpApp({
     if (!parsed.success) return c.json({ error: 'invalid_body' }, 400);
     const normalised = normaliseEoa(parsed.data.eoa);
     if (!normalised) return c.json({ error: 'invalid_eoa' }, 400);
+    const chainId = resolveChainId(parsed.data.chainId);
+    if (chainId === null) return c.json({ error: 'unsupported_chain' }, 400);
 
-    const result = await manageService.removeSubscription(token, normalised);
+    const result = await manageService.removeSubscription(token, normalised, chainId);
     if (result.kind === 'not_found') return c.json({ error: 'not_found' }, 404);
     return c.json({ removed: result.removed });
   });
@@ -130,8 +149,10 @@ export function createHttpApp({
     if (!parsed.success) return c.json({ error: 'invalid_body' }, 400);
     const normalised = normaliseEoa(parsed.data.eoa);
     if (!normalised) return c.json({ error: 'invalid_eoa' }, 400);
+    const chainId = resolveChainId(parsed.data.chainId);
+    if (chainId === null) return c.json({ error: 'unsupported_chain' }, 400);
 
-    const result = await checkService.check(normalised);
+    const result = await checkService.check(normalised, chainId);
     return c.json({
       eoa: result.eoa,
       chainId: result.chainId,

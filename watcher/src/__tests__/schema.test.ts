@@ -46,16 +46,20 @@ describe('watcher schema migration', () => {
     ]);
   });
 
-  it('enforces UNIQUE(eoa, telegram_chat_id) on subscriptions', async () => {
-    await db.query(`INSERT INTO subscriptions (eoa, telegram_chat_id) VALUES ('${ADDR_A}', 42)`);
+  it('enforces UNIQUE(eoa, chain_id, telegram_chat_id) on subscriptions', async () => {
+    await db.query(
+      `INSERT INTO subscriptions (eoa, chain_id, telegram_chat_id) VALUES ('${ADDR_A}', 1, 42)`,
+    );
     await expect(
-      db.query(`INSERT INTO subscriptions (eoa, telegram_chat_id) VALUES ('${ADDR_A}', 42)`),
+      db.query(
+        `INSERT INTO subscriptions (eoa, chain_id, telegram_chat_id) VALUES ('${ADDR_A}', 1, 42)`,
+      ),
     ).rejects.toThrow();
   });
 
   it('permits same EOA in different chats (many-to-many)', async () => {
     await db.query(
-      `INSERT INTO subscriptions (eoa, telegram_chat_id) VALUES ('${ADDR_A}', 1), ('${ADDR_A}', 2)`,
+      `INSERT INTO subscriptions (eoa, chain_id, telegram_chat_id) VALUES ('${ADDR_A}', 1, 1), ('${ADDR_A}', 1, 2)`,
     );
     const { rows } = await db.query<{ n: string }>('SELECT COUNT(*)::int AS n FROM subscriptions');
     expect(Number(rows[0]?.n)).toBe(2);
@@ -63,7 +67,15 @@ describe('watcher schema migration', () => {
 
   it('permits same chat subscribing to different EOAs (many-to-many)', async () => {
     await db.query(
-      `INSERT INTO subscriptions (eoa, telegram_chat_id) VALUES ('${ADDR_A}', 1), ('${ADDR_B}', 1)`,
+      `INSERT INTO subscriptions (eoa, chain_id, telegram_chat_id) VALUES ('${ADDR_A}', 1, 1), ('${ADDR_B}', 1, 1)`,
+    );
+    const { rows } = await db.query<{ n: string }>('SELECT COUNT(*)::int AS n FROM subscriptions');
+    expect(Number(rows[0]?.n)).toBe(2);
+  });
+
+  it('permits same EOA + same chat across different chains', async () => {
+    await db.query(
+      `INSERT INTO subscriptions (eoa, chain_id, telegram_chat_id) VALUES ('${ADDR_A}', 1, 1), ('${ADDR_A}', 8453, 1)`,
     );
     const { rows } = await db.query<{ n: string }>('SELECT COUNT(*)::int AS n FROM subscriptions');
     expect(Number(rows[0]?.n)).toBe(2);
@@ -72,7 +84,7 @@ describe('watcher schema migration', () => {
   it('rejects uppercase hex via regex CHECK on eoa', async () => {
     await expect(
       db.query(
-        `INSERT INTO subscriptions (eoa, telegram_chat_id) VALUES ('0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 1)`,
+        `INSERT INTO subscriptions (eoa, chain_id, telegram_chat_id) VALUES ('0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 1, 1)`,
       ),
     ).rejects.toThrow();
   });
@@ -112,8 +124,8 @@ describe('watcher schema migration', () => {
   it('rejects pending_confirmations with a malformed EOA', async () => {
     await expect(
       db.query(
-        `INSERT INTO pending_confirmations (code, eoa, expires_at)
-         VALUES ('abc', '0xnothex', NOW() + INTERVAL '5 minutes')`,
+        `INSERT INTO pending_confirmations (code, eoa, chain_id, expires_at)
+         VALUES ('abc', '0xnothex', 1, NOW() + INTERVAL '5 minutes')`,
       ),
     ).rejects.toThrow();
   });

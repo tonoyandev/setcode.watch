@@ -1,12 +1,27 @@
+import { ARBITRUM, BASE, type ChainConfig, MAINNET, OPTIMISM } from '@setcode/shared';
 import { createConfig } from 'ponder';
-import type { Address } from 'viem';
-import { http } from 'viem';
+import type { Address, Transport } from 'viem';
+import { http, fallback } from 'viem';
 import { DelegationCanaryAbi } from './src/abis/DelegationCanary.js';
 import { SetCodeRegistryAbi } from './src/abis/SetCodeRegistry.js';
-import { optionalAddress, requireRpcUrl, requireStartBlock, warn } from './src/lib/env.js';
+import {
+  fallbackRpcUrlsFor,
+  optionalAddress,
+  requireRpcUrlFor,
+  requireStartBlockFor,
+  warn,
+} from './src/lib/env.js';
 
-const startBlock = requireStartBlock();
-const rpcUrl = requireRpcUrl();
+// Build a viem Transport from the chain's primary RPC + any configured
+// fallbacks. Ponder hands this to its block-fetching loop; the fallback
+// transport rotates through endpoints on transient RPC errors so a
+// single flaky provider doesn't stall the indexer.
+function transportFor(chain: ChainConfig): Transport {
+  const primary = http(requireRpcUrlFor(chain));
+  const fallbackUrls = fallbackRpcUrlsFor(chain);
+  if (fallbackUrls.length === 0) return primary;
+  return fallback([primary, ...fallbackUrls.map((url) => http(url))]);
+}
 
 const DISABLED_ADDRESS = '0x000000000000000000000000000000000000dEaD' as Address;
 
@@ -22,11 +37,33 @@ if (!resolvedRegistry) {
 }
 const registryAddress = resolvedRegistry ?? DISABLED_ADDRESS;
 
+const mainnetStartBlock = requireStartBlockFor(MAINNET);
+const optimismStartBlock = requireStartBlockFor(OPTIMISM);
+const baseStartBlock = requireStartBlockFor(BASE);
+const arbitrumStartBlock = requireStartBlockFor(ARBITRUM);
+
+// The DelegationScanner block source is attached to all four chains so
+// the same handler runs once per chain per block. The Canary/Registry
+// contracts are mainnet-only because that's where they're deployed —
+// classification metadata is shared across chains via the watcher's
+// classifier service, not duplicated on each L2.
 export default createConfig({
   chains: {
     mainnet: {
-      id: 1,
-      rpc: http(rpcUrl),
+      id: MAINNET.id,
+      rpc: transportFor(MAINNET),
+    },
+    optimism: {
+      id: OPTIMISM.id,
+      rpc: transportFor(OPTIMISM),
+    },
+    base: {
+      id: BASE.id,
+      rpc: transportFor(BASE),
+    },
+    arbitrum: {
+      id: ARBITRUM.id,
+      rpc: transportFor(ARBITRUM),
     },
   },
   contracts: {
@@ -34,19 +71,23 @@ export default createConfig({
       chain: 'mainnet',
       abi: DelegationCanaryAbi,
       address: canaryAddress,
-      startBlock,
+      startBlock: mainnetStartBlock,
     },
     SetCodeRegistry: {
       chain: 'mainnet',
       abi: SetCodeRegistryAbi,
       address: registryAddress,
-      startBlock,
+      startBlock: mainnetStartBlock,
     },
   },
   blocks: {
     DelegationScanner: {
-      chain: 'mainnet',
-      startBlock,
+      chain: {
+        mainnet: { startBlock: mainnetStartBlock },
+        optimism: { startBlock: optimismStartBlock },
+        base: { startBlock: baseStartBlock },
+        arbitrum: { startBlock: arbitrumStartBlock },
+      },
       interval: 1,
     },
   },

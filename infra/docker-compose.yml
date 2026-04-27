@@ -101,10 +101,27 @@ services:
       # Ponder's production mode requires an explicit namespace. Each fresh
       # deploy gets its own schema so readers can pin the one they expect.
       DATABASE_SCHEMA: ${PONDER_DATABASE_SCHEMA:-indexer}
+      # Per-chain RPC URLs — all four are required because Ponder boots
+      # all configured chains together. Add a fallback per chain for
+      # production (Ponder transparently fails over on RPC errors).
       ETH_RPC_URL: ${ETH_RPC_URL:?ETH_RPC_URL is required}
       ETH_RPC_FALLBACK_1: ${ETH_RPC_FALLBACK_1:-}
       ETH_RPC_FALLBACK_2: ${ETH_RPC_FALLBACK_2:-}
-      PONDER_START_BLOCK: ${PONDER_START_BLOCK:?PONDER_START_BLOCK is required}
+      OP_RPC_URL: ${OP_RPC_URL:?OP_RPC_URL is required}
+      OP_RPC_FALLBACK_1: ${OP_RPC_FALLBACK_1:-}
+      OP_RPC_FALLBACK_2: ${OP_RPC_FALLBACK_2:-}
+      BASE_RPC_URL: ${BASE_RPC_URL:?BASE_RPC_URL is required}
+      BASE_RPC_FALLBACK_1: ${BASE_RPC_FALLBACK_1:-}
+      BASE_RPC_FALLBACK_2: ${BASE_RPC_FALLBACK_2:-}
+      ARB_RPC_URL: ${ARB_RPC_URL:?ARB_RPC_URL is required}
+      ARB_RPC_FALLBACK_1: ${ARB_RPC_FALLBACK_1:-}
+      ARB_RPC_FALLBACK_2: ${ARB_RPC_FALLBACK_2:-}
+      # Per-chain start blocks — pin each near the Pectra-equivalent
+      # activation height so we don't replay pre-EIP-7702 history.
+      ETH_START_BLOCK: ${ETH_START_BLOCK:?ETH_START_BLOCK is required}
+      OP_START_BLOCK: ${OP_START_BLOCK:?OP_START_BLOCK is required}
+      BASE_START_BLOCK: ${BASE_START_BLOCK:?BASE_START_BLOCK is required}
+      ARB_START_BLOCK: ${ARB_START_BLOCK:?ARB_START_BLOCK is required}
       DELEGATION_CANARY_ADDRESS: ${DELEGATION_CANARY_ADDRESS:-}
       SETCODE_REGISTRY_ADDRESS: ${SETCODE_REGISTRY_ADDRESS:-}
     depends_on:

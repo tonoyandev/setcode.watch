@@ -86,11 +86,16 @@ async function makeHarness(
   };
 }
 
-async function seedSubscription(pg: PGlite, eoa: Address, chatId: bigint): Promise<void> {
+async function seedSubscription(
+  pg: PGlite,
+  eoa: Address,
+  chatId: bigint,
+  chainId = 1,
+): Promise<void> {
   await pg.query(
-    `INSERT INTO subscriptions (eoa, telegram_chat_id, confirmed, confirmed_at)
-     VALUES ($1, $2, true, NOW())`,
-    [eoa, chatId.toString()],
+    `INSERT INTO subscriptions (eoa, chain_id, telegram_chat_id, confirmed, confirmed_at)
+     VALUES ($1, $2, $3, true, NOW())`,
+    [eoa, chainId, chatId.toString()],
   );
 }
 
@@ -313,6 +318,53 @@ describe('DispatcherService', () => {
     expect(result.sent).toBe(2);
     const cursor = await h.service.readCursor();
     expect(cursor).toEqual({ lastBlock: 101n, lastId: 'evt-2' });
+  });
+
+  it('does not fan out a Base event to a mainnet-only subscriber', async () => {
+    await h.service.initialiseCursorIfMissing();
+    // Same EOA, same chat, but the subscription is for Ethereum (chainId=1).
+    // The event below is on Base (chainId=8453); the dispatcher must not
+    // alert this chat — otherwise users on Ethereum would get noise from
+    // every L2 their address touches.
+    await seedSubscription(h.pg, EOA_A, 1n, 1);
+    await insertDelegationEvent(h.pg, {
+      id: 'evt-base-1',
+      eoa: EOA_A,
+      previousTarget: null,
+      newTarget: TARGET_NEW,
+      chainId: 8453,
+      blockNumber: 100n,
+      timestamp: 1000n,
+      txHash: TX_1,
+    });
+
+    const result = await h.service.processBatch();
+    expect(result.events).toBe(1);
+    expect(result.sent).toBe(0);
+    expect(h.sends).toEqual([]);
+    // Cursor still advances — the event is "handled" (no eligible subs).
+    const cursor = await h.service.readCursor();
+    expect(cursor).toEqual({ lastBlock: 100n, lastId: 'evt-base-1' });
+  });
+
+  it('fans out a Base event to a Base subscriber while a mainnet sub for the same EOA stays silent', async () => {
+    await h.service.initialiseCursorIfMissing();
+    await seedSubscription(h.pg, EOA_A, 1n, 1); // mainnet sub
+    await seedSubscription(h.pg, EOA_A, 2n, 8453); // base sub
+    await insertDelegationEvent(h.pg, {
+      id: 'evt-base-2',
+      eoa: EOA_A,
+      previousTarget: null,
+      newTarget: TARGET_NEW,
+      chainId: 8453,
+      blockNumber: 100n,
+      timestamp: 1000n,
+      txHash: TX_1,
+    });
+
+    const result = await h.service.processBatch();
+    expect(result.sent).toBe(1);
+    expect(h.sends.map((s) => s.chatId)).toEqual([2n]);
   });
 
   it('resolves classifications via on-chain state and embeds them in the alert', async () => {

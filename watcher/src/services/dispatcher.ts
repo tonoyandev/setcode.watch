@@ -142,6 +142,10 @@ export function createDispatcherService(deps: DispatcherDeps, options: Dispatche
       result.events += 1;
 
       const eoa = event.eoa.toLowerCase() as Address;
+      // Subscriptions are per-chain: a user watching this EOA on Ethereum
+      // must NOT receive alerts when the same EOA delegates on Base. We
+      // filter on event.chainId so each chain's events fan out only to
+      // its own subscribers.
       const subs = await db
         .select({
           telegramChatId: watcherSchema.subscriptions.telegramChatId,
@@ -150,6 +154,7 @@ export function createDispatcherService(deps: DispatcherDeps, options: Dispatche
         .where(
           and(
             eq(watcherSchema.subscriptions.eoa, eoa),
+            eq(watcherSchema.subscriptions.chainId, event.chainId),
             eq(watcherSchema.subscriptions.confirmed, true),
           ),
         );

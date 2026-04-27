@@ -24,6 +24,11 @@ export const subscriptions = pgTable(
   {
     id: serial('id').primaryKey(),
     eoa: text('eoa').notNull(),
+    // chain_id is part of the subscription identity — a user wanting alerts
+    // for the same EOA on Ethereum and Base creates two distinct rows.
+    // The dispatcher's per-event subscriber lookup must filter by chainId
+    // so an Ethereum-only subscriber never receives a Base alert.
+    chainId: integer('chain_id').notNull(),
     telegramChatId: bigint('telegram_chat_id', { mode: 'bigint' }).notNull(),
     telegramUsername: text('telegram_username'),
     confirmed: boolean('confirmed').notNull().default(false),
@@ -31,8 +36,12 @@ export const subscriptions = pgTable(
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
   },
   (t) => ({
-    uqEoaChat: uniqueIndex('subscriptions_eoa_chat_uq').on(t.eoa, t.telegramChatId),
-    ixEoa: index('subscriptions_eoa_ix').on(t.eoa),
+    uqEoaChainChat: uniqueIndex('subscriptions_eoa_chain_chat_uq').on(
+      t.eoa,
+      t.chainId,
+      t.telegramChatId,
+    ),
+    ixEoaChain: index('subscriptions_eoa_chain_ix').on(t.eoa, t.chainId),
     ixChat: index('subscriptions_chat_ix').on(t.telegramChatId),
     ckEoaFormat: check('subscriptions_eoa_lowerhex_ck', EOA_LOWERHEX),
   }),
@@ -47,6 +56,11 @@ export const pendingConfirmations = pgTable(
   {
     code: text('code').primaryKey(),
     eoa: text('eoa').notNull(),
+    // The user picks the chain on the website before clicking through to
+    // Telegram, so the chain selection has to survive the web→bot handoff
+    // here. /start in the bot reads it back and writes it onto the
+    // subscriptions row at confirm time.
+    chainId: integer('chain_id').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },

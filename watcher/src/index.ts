@@ -1,5 +1,4 @@
 import { serve } from '@hono/node-server';
-import { CHAIN_ID_MAINNET } from '@setcode/shared/constants';
 import { createBot } from './bot/index.js';
 import { createDatabase } from './db/client.js';
 import { startDispatcherLoop } from './dispatcher/loop.js';
@@ -44,10 +43,7 @@ async function main() {
   const manageService = createManageService(db, { webBaseUrl: webBaseUrl() });
 
   const classification = createClassificationService(db);
-  const checkService = createCheckService(db, {
-    chainId: CHAIN_ID_MAINNET,
-    classification,
-  });
+  const checkService = createCheckService(db, { classification });
 
   const bot = createBot({ token, service, manage: manageService, check: checkService });
   const registryService = createRegistryService(db);

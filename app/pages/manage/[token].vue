@@ -1,12 +1,29 @@
 <script setup lang="ts">
 import type { Address } from 'viem';
 import { computed, onMounted, ref } from 'vue';
+import { CHAINS } from '~/composables/useChainCatalog';
 import {
   type ManageSubscription,
   WatcherApiException,
   useWatcherApi,
 } from '~/composables/useWatcherApi';
 import { t } from '~/i18n';
+
+// Cheap lookup for the chain name on each subscription row. Falls back
+// to "chain #<id>" when the watcher returns a row for a chain we don't
+// have catalog metadata for (shouldn't happen, but defensive UX is
+// cheaper than an empty-ish row).
+const chainNameById = new Map<number, string>(CHAINS.map((c) => [c.id, c.name]));
+function chainLabel(id: number): string {
+  return chainNameById.get(id) ?? `chain #${id}`;
+}
+
+// Composite key for {eoa, chainId} so the same EOA can appear twice (one
+// row per chain) without Vue collapsing them or our async-state maps
+// confusing one row for the other.
+function rowKey(eoa: Address, chainId: number): string {
+  return `${chainId}:${eoa.toLowerCase()}`;
+}
 
 useHead({ title: 'Manage subscriptions — SetCode.watch' });
 
@@ -25,10 +42,12 @@ const tokenLooksValid = computed(() => TOKEN_RE.test(token.value));
 const loading = ref(false);
 const subscriptions = ref<ManageSubscription[]>([]);
 const loadError = ref<string | null>(null);
-// Per-row async state so rapid-fire clicks don't interfere with each other.
-const removingEoa = ref<Address | null>(null);
-const rowError = ref<{ eoa: Address; message: string } | null>(null);
-const rowNotice = ref<{ eoa: Address; message: string } | null>(null);
+// Per-row async state so rapid-fire clicks don't interfere with each
+// other. Keyed on `${chainId}:${eoa}` because the same EOA can appear on
+// multiple chains for one chat — keying by EOA alone would crosstalk.
+const removingRow = ref<string | null>(null);
+const rowError = ref<{ key: string; message: string } | null>(null);
+const rowNotice = ref<{ key: string; message: string } | null>(null);
 
 async function loadSubscriptions() {
   loadError.value = null;
@@ -61,15 +80,19 @@ async function loadSubscriptions() {
   }
 }
 
-async function onRemove(eoa: Address) {
+async function onRemove(eoa: Address, chainId: number) {
+  const key = rowKey(eoa, chainId);
+  const chain = chainLabel(chainId);
   rowError.value = null;
   rowNotice.value = null;
-  removingEoa.value = eoa;
+  removingRow.value = key;
   try {
-    const res = await api.removeManage(token.value, eoa);
+    const res = await api.removeManage(token.value, eoa, chainId);
     if (res.removed) {
-      subscriptions.value = subscriptions.value.filter((s) => s.eoa !== eoa);
-      rowNotice.value = { eoa, message: t('manage.removed', { eoa }) };
+      subscriptions.value = subscriptions.value.filter(
+        (s) => !(s.eoa === eoa && s.chainId === chainId),
+      );
+      rowNotice.value = { key, message: t('manage.removed', { eoa, chain }) };
     } else {
       // Nothing matched — row was probably stale; refresh to resync.
       await loadSubscriptions();
@@ -82,13 +105,13 @@ async function onRemove(eoa: Address) {
           kind === 'invalid_token' ? t('manage.invalidToken') : t('manage.notFound');
         subscriptions.value = [];
       } else {
-        rowError.value = { eoa, message: t('manage.removeFailed', { eoa }) };
+        rowError.value = { key, message: t('manage.removeFailed', { eoa, chain }) };
       }
     } else {
-      rowError.value = { eoa, message: t('manage.removeFailed', { eoa }) };
+      rowError.value = { key, message: t('manage.removeFailed', { eoa, chain }) };
     }
   } finally {
-    removingEoa.value = null;
+    removingRow.value = null;
   }
 }
 
@@ -142,13 +165,14 @@ onMounted(() => {
       </p>
       <GCard
         v-for="sub in subscriptions"
-        :key="sub.eoa"
+        :key="`${sub.chainId}:${sub.eoa}`"
         class="manage__row"
         padded
       >
         <div class="manage__row-body">
           <GAddress :address="sub.eoa" />
           <p class="manage__row-meta">
+            {{ t('manage.onChain', { chain: chainLabel(sub.chainId) }) }} ·
             {{ t('manage.confirmedAt', { when: formatConfirmedAt(sub.confirmedAt) }) }}
           </p>
         </div>
@@ -157,15 +181,21 @@ onMounted(() => {
             variant="secondary"
             size="sm"
             type="button"
-            :loading="removingEoa === sub.eoa"
-            :disabled="removingEoa !== null && removingEoa !== sub.eoa"
-            @click.stop="onRemove(sub.eoa)"
+            :loading="removingRow === `${sub.chainId}:${sub.eoa}`"
+            :disabled="
+              removingRow !== null && removingRow !== `${sub.chainId}:${sub.eoa}`
+            "
+            @click.stop="onRemove(sub.eoa, sub.chainId)"
           >
-            {{ removingEoa === sub.eoa ? t('manage.removing') : t('manage.remove') }}
+            {{
+              removingRow === `${sub.chainId}:${sub.eoa}`
+                ? t('manage.removing')
+                : t('manage.remove')
+            }}
           </GButton>
         </div>
         <p
-          v-if="rowError && rowError.eoa === sub.eoa"
+          v-if="rowError && rowError.key === `${sub.chainId}:${sub.eoa}`"
           class="manage__row-error"
           role="alert"
         >

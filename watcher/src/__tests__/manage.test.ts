@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
+import { CHAIN_ID_MAINNET } from '@setcode/shared';
 import { drizzle } from 'drizzle-orm/pglite';
 import type { Address } from 'viem';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -58,8 +59,13 @@ async function makeHarness(): Promise<Harness> {
   return { pg, db, confirmations, manage, tokens };
 }
 
-async function subscribe(h: Harness, eoa: Address, chatId: bigint): Promise<void> {
-  const { code } = await h.confirmations.createPending({ eoa });
+async function subscribe(
+  h: Harness,
+  eoa: Address,
+  chatId: bigint,
+  chainId = CHAIN_ID_MAINNET,
+): Promise<void> {
+  const { code } = await h.confirmations.createPending({ eoa, chainId });
   await h.confirmations.confirm({ code, chatId, username: null });
 }
 
@@ -117,7 +123,7 @@ describe('ManageService', () => {
     await subscribe(h, ADDR_A, 99n);
     const { token } = await h.manage.issue(42n);
 
-    const result = await h.manage.removeSubscription(token, ADDR_A);
+    const result = await h.manage.removeSubscription(token, ADDR_A, CHAIN_ID_MAINNET);
     expect(result).toEqual({ kind: 'ok', removed: true });
 
     const list42 = await h.confirmations.list(42n);
@@ -128,15 +134,28 @@ describe('ManageService', () => {
 
   it('removeSubscription returns ok/removed=false when nothing matched', async () => {
     const { token } = await h.manage.issue(42n);
-    const result = await h.manage.removeSubscription(token, ADDR_A);
+    const result = await h.manage.removeSubscription(token, ADDR_A, CHAIN_ID_MAINNET);
     expect(result).toEqual({ kind: 'ok', removed: false });
   });
 
   it('removeSubscription returns not_found for a revoked token', async () => {
     const first = await h.manage.issue(42n);
     await h.manage.issue(42n); // rotates, revokes first
-    const result = await h.manage.removeSubscription(first.token, ADDR_A);
+    const result = await h.manage.removeSubscription(first.token, ADDR_A, CHAIN_ID_MAINNET);
     expect(result).toEqual({ kind: 'not_found' });
+  });
+
+  it('removeSubscription leaves the same EOA on a different chain intact', async () => {
+    await subscribe(h, ADDR_A, 42n, 1); // mainnet
+    await subscribe(h, ADDR_A, 42n, 8453); // base
+    const { token } = await h.manage.issue(42n);
+
+    const result = await h.manage.removeSubscription(token, ADDR_A, 1);
+    expect(result).toEqual({ kind: 'ok', removed: true });
+
+    const list42 = await h.confirmations.list(42n);
+    expect(list42).toHaveLength(1);
+    expect(list42[0]?.chainId).toBe(8453);
   });
 
   it('revoke flips active tokens and returns false when already revoked', async () => {

@@ -44,13 +44,12 @@ describe('CheckService', () => {
 
   function service() {
     return createCheckService(db, {
-      chainId: CHAIN_ID_MAINNET,
       classification: createClassificationService(db),
     });
   }
 
   it('returns unknown/source=unknown when no delegation row exists', async () => {
-    const result = await service().check(EOA);
+    const result = await service().check(EOA, CHAIN_ID_MAINNET);
     expect(result).toEqual({
       eoa: EOA.toLowerCase(),
       chainId: CHAIN_ID_MAINNET,
@@ -68,7 +67,7 @@ describe('CheckService', () => {
       currentTarget: null,
       lastUpdated: 42n,
     });
-    const result = await service().check(EOA);
+    const result = await service().check(EOA, CHAIN_ID_MAINNET);
     expect(result.classification).toBe('unknown');
     expect(result.source).toBe('unknown');
     expect(result.currentTarget).toBeNull();
@@ -88,7 +87,7 @@ describe('CheckService', () => {
       reason: 'known drainer',
       updatedAt: 99n,
     });
-    const result = await service().check(EOA);
+    const result = await service().check(EOA, CHAIN_ID_MAINNET);
     expect(result.currentTarget).toBe(TARGET_MALICIOUS.toLowerCase());
     expect(result.classification).toBe('malicious');
     expect(result.source).toBe('registry');
@@ -102,7 +101,7 @@ describe('CheckService', () => {
       currentTarget: '0x9999999999999999999999999999999999999999',
       lastUpdated: 7n,
     });
-    const result = await service().check(EOA);
+    const result = await service().check(EOA, CHAIN_ID_MAINNET);
     expect(result.classification).toBe('unknown');
     expect(result.source).toBe('unknown');
   });

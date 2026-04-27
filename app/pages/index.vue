@@ -19,7 +19,7 @@ const wallet = useWallet();
 const config = useRuntimeConfig();
 const botUsername = config.public.botUsername;
 
-const { chains, mainnets, testnets } = useChainCatalog();
+const { mainnets, testnets } = useChainCatalog();
 
 const inputId = useId();
 const input = ref('');
@@ -30,8 +30,9 @@ const inputEl = ref<HTMLInputElement | null>(null);
 // renders its idle state). Set when the user submits or the wallet connects.
 const checkedAddress = ref<Address | null>(null);
 // Latched per-chain results bubbled up by GChainRow. Keyed by chain id.
-// Currently only mainnet drives the page-level Subscribe gate, but the
-// shape generalises cleanly when more chains become monitored.
+// Each row renders its own Subscribe/Watch CTA based on its entry here,
+// so the page just needs to remember the latest classification per
+// chain — no page-level "is this chain delegated?" gate any more.
 const chainResults = ref<Record<number, CheckResponse>>({});
 const clientError = ref<string | null>(null);
 const focused = ref(false);
@@ -46,7 +47,9 @@ const checking = ref(false);
 // the same indent level as the Mainnets header for symmetry.
 const testnetsOpen = ref(false);
 
-const subscribing = ref(false);
+// Tracks which chain's Subscribe CTA is in flight, so only that row spins
+// while others stay clickable. Null = no subscribe in flight.
+const subscribingChainId = ref<number | null>(null);
 const confirmation = ref<CreateConfirmationResponse | null>(null);
 const subscribeError = ref<string | null>(null);
 const copied = ref(false);
@@ -78,21 +81,6 @@ watch(
 );
 
 const canCheck = computed(() => input.value.trim().length > 0 && !checking.value);
-
-// Mainnet is the only chain that drives the Subscribe flow today.
-// Hide if we don't have a classified result for it yet.
-const mainnetChainId = computed(() => {
-  const m = chains.find((c) => c.monitored);
-  return m?.id ?? null;
-});
-const mainnetResult = computed<CheckResponse | null>(() => {
-  const id = mainnetChainId.value;
-  if (id === null) return null;
-  return chainResults.value[id] ?? null;
-});
-const hasMainnetDelegation = computed(
-  () => !!mainnetResult.value && mainnetResult.value.currentTarget !== null,
-);
 
 async function onCheck() {
   clientError.value = null;
@@ -142,23 +130,29 @@ function focusLookup() {
 }
 
 // --- Subscribe flow: mints a confirmation code, bot deep-links the user.
-async function onSubscribe() {
+async function onSubscribe(payload: { chainId: number }) {
   const addr = checkedAddress.value;
-  if (!addr || subscribing.value) return;
-  subscribing.value = true;
+  if (!addr || subscribingChainId.value !== null) return;
+  subscribingChainId.value = payload.chainId;
   subscribeError.value = null;
   confirmation.value = null;
   copied.value = false;
   try {
-    confirmation.value = await api.createConfirmation(addr);
+    confirmation.value = await api.createConfirmation(addr, payload.chainId);
   } catch (err) {
     if (err instanceof WatcherApiException && err.detail.kind === 'invalid_eoa') {
       subscribeError.value = t('error.invalidAddress');
+    } else if (err instanceof WatcherApiException && err.detail.kind === 'unsupported_chain') {
+      // Defensive: the row should have been gated by `chain.monitored`
+      // before reaching this branch, but if a stale catalog entry flips
+      // a non-indexed chain to monitored we want a readable message
+      // rather than a generic failure.
+      subscribeError.value = t('home.subscribe.error');
     } else {
       subscribeError.value = t('home.subscribe.error');
     }
   } finally {
-    subscribing.value = false;
+    subscribingChainId.value = null;
   }
 }
 
@@ -185,14 +179,10 @@ const secondsRemaining = computed(() => {
 });
 const expired = computed(() => secondsRemaining.value === 0);
 
-// --- Watch flow: opens t.me/<bot>?start=w_<addr>. No backend round-trip.
-// Only meaningful once mainnet has classified the address; the row hides
-// the link until then anyway via its own `watchVisible` computed.
-const watchLink = computed(() => {
-  const addr = checkedAddress.value;
-  if (!addr || !hasMainnetDelegation.value) return '';
-  return `https://t.me/${botUsername}?start=w_${addr}`;
-});
+// --- Watch flow: each GChainRow now builds its own deep-link
+// (`w_<chainId>_<addr>`) since the format is per-chain. The page no
+// longer computes a single shared watchLink — see GChainRow's own
+// `watchLink` computed.
 </script>
 
 <template>
@@ -275,8 +265,7 @@ const watchLink = computed(() => {
                   :key="chain.id"
                   :chain="chain"
                   :address="checkedAddress"
-                  :subscribing="subscribing"
-                  :watch-link="watchLink"
+                  :subscribing="subscribingChainId === chain.id"
                   @subscribe="onSubscribe"
                   @classified="onChainClassified"
                   @focus-input="focusLookup"
@@ -323,8 +312,7 @@ const watchLink = computed(() => {
                   :key="chain.id"
                   :chain="chain"
                   :address="checkedAddress"
-                  :subscribing="subscribing"
-                  :watch-link="watchLink"
+                  :subscribing="subscribingChainId === chain.id"
                   @subscribe="onSubscribe"
                   @classified="onChainClassified"
                   @focus-input="focusLookup"
