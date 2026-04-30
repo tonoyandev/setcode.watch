@@ -51,16 +51,18 @@ export const subscriptions = pgTable(
 // creation (web-first flow: user types EOA → site generates code → user
 // clicks Telegram deep-link → bot captures chat id on /start) and is
 // written onto the subscriptions row at confirmation time.
+//
+// `chain_ids` is an array because the bell on the home page subscribes
+// the user to every monitored chain at once with a single tap — that's
+// the architectural promise of the product, not a per-chain feature.
+// Storing the chain set on the pending row preserves it across the
+// web→bot handoff so /start fans out into N subscription rows.
 export const pendingConfirmations = pgTable(
   'pending_confirmations',
   {
     code: text('code').primaryKey(),
     eoa: text('eoa').notNull(),
-    // The user picks the chain on the website before clicking through to
-    // Telegram, so the chain selection has to survive the web→bot handoff
-    // here. /start in the bot reads it back and writes it onto the
-    // subscriptions row at confirm time.
-    chainId: integer('chain_id').notNull(),
+    chainIds: integer('chain_ids').array().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
@@ -68,6 +70,12 @@ export const pendingConfirmations = pgTable(
     ixExpires: index('pending_confirmations_expires_ix').on(t.expiresAt),
     ixEoa: index('pending_confirmations_eoa_ix').on(t.eoa),
     ckEoaFormat: check('pending_confirmations_eoa_lowerhex_ck', EOA_LOWERHEX),
+    // Defence-in-depth: an empty array would silently produce a
+    // confirmation that subscribes to nothing. Reject at the DB.
+    ckChainIdsNonEmpty: check(
+      'pending_confirmations_chain_ids_nonempty_ck',
+      sql`cardinality(chain_ids) > 0`,
+    ),
   }),
 );
 

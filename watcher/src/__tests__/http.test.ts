@@ -10,6 +10,7 @@ function makeApp(
   checkOverrides: Partial<CheckService> = {},
   manageOverrides: Partial<ManageService> = {},
   registryOverrides: Partial<RegistryService> = {},
+  liveCheckableChainIds: readonly number[] = [1, 10, 8453, 42161],
 ) {
   const service = {
     createPending: vi.fn(),
@@ -46,6 +47,7 @@ function makeApp(
     registryService,
     botUsername: 'SetCodeBot',
     corsOrigins: ['http://localhost:3000'],
+    liveCheckableChainIds,
   });
   return { app, service, checkService, manageService, registryService };
 }
@@ -75,17 +77,20 @@ describe('HTTP API', () => {
       code: string;
       deepLink: string;
       expiresAt: string;
+      chainIds: number[];
     };
     expect(body.code).toBe('c_abcdefghijklmnop');
     expect(body.deepLink).toBe('https://t.me/SetCodeBot?start=c_abcdefghijklmnop');
     expect(body.expiresAt).toBe('2026-04-21T10:05:00.000Z');
+    // Bell-flow default: missing chainIds → all four supported chains.
+    expect(body.chainIds).toEqual([1, 10, 8453, 42161]);
     expect(createPending).toHaveBeenCalledWith({
       eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      chainId: 1,
+      chainIds: [1, 10, 8453, 42161],
     });
   });
 
-  it('POST /confirmations forwards an explicit chainId from the body', async () => {
+  it('POST /confirmations forwards an explicit chainIds list from the body', async () => {
     const createPending = vi.fn().mockResolvedValue({
       code: 'c_abcdefghijklmnop',
       expiresAt: new Date('2026-04-21T10:05:00Z'),
@@ -94,22 +99,28 @@ describe('HTTP API', () => {
     const res = await app.request('/confirmations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', chainId: 8453 }),
+      body: JSON.stringify({
+        eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        chainIds: [8453, 10],
+      }),
     });
     expect(res.status).toBe(200);
     expect(createPending).toHaveBeenCalledWith({
       eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      chainId: 8453,
+      chainIds: [8453, 10],
     });
   });
 
-  it('POST /confirmations rejects an unsupported chainId', async () => {
+  it('POST /confirmations rejects when the chainIds list contains an unsupported chain', async () => {
     const createPending = vi.fn();
     const { app } = makeApp({ createPending });
     const res = await app.request('/confirmations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', chainId: 99999 }),
+      body: JSON.stringify({
+        eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        chainIds: [1, 99999],
+      }),
     });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'unsupported_chain' });
@@ -195,6 +206,66 @@ describe('HTTP API', () => {
     });
     expect(res.status).toBe(200);
     expect(check).toHaveBeenCalledWith('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 8453);
+  });
+
+  it('POST /check accepts a live-only chainId (testnets, non-indexed L2s)', async () => {
+    // Sepolia (11155111) isn't in SUPPORTED_CHAIN_IDS but the watcher
+    // has a public RPC for it. /check should still accept it so the
+    // website can render a live delegation status for testnet rows.
+    const check = vi.fn().mockResolvedValue({
+      eoa: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      chainId: 11155111,
+      currentTarget: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      classification: 'unknown',
+      source: 'unknown',
+      lastUpdated: null,
+    });
+    const { app } = makeApp({}, { check }, {}, {}, [1, 10, 8453, 42161, 11155111]);
+    const res = await app.request('/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        chainId: 11155111,
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(check).toHaveBeenCalledWith('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 11155111);
+  });
+
+  it('POST /check rejects chainIds the watcher cannot reach', async () => {
+    // chain 9999 is in neither SUPPORTED_CHAIN_IDS nor the live-RPC
+    // map → 400 unsupported_chain. Without this guard the service
+    // would reach for an undefined RPC URL and hang.
+    const check = vi.fn();
+    const { app } = makeApp({}, { check });
+    const res = await app.request('/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', chainId: 9999 }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'unsupported_chain' });
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it('POST /confirmations still rejects live-only chainIds', async () => {
+    // /confirmations is the subscription surface — live-only chains
+    // can't be subscribed to (no indexer = no alerts), so the
+    // boundary keeps rejecting them even when /check would accept.
+    const createPending = vi.fn();
+    const { app } = makeApp({ createPending }, {}, {}, {}, [1, 10, 8453, 42161, 11155111]);
+    const res = await app.request('/confirmations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eoa: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        chainIds: [11155111],
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'unsupported_chain' });
+    expect(createPending).not.toHaveBeenCalled();
   });
 
   it('GET /manage/:token returns the chat subscriptions on happy path', async () => {

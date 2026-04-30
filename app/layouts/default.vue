@@ -4,6 +4,9 @@ import { t } from '~/i18n';
 
 <template>
   <div class="layout">
+    <!-- Dark-mode-only cursor halo. Fixed overlay, pointer-events:none,
+         self-hides on touch devices and in light theme. -->
+    <GMouseGlow />
     <header class="layout__header">
       <div class="layout__bar">
         <NuxtLink to="/" class="layout__brand" aria-label="SetCode.watch home">

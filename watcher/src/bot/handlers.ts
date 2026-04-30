@@ -16,6 +16,14 @@ function chainLabel(chainId: number): string {
   return getChainById(chainId)?.name ?? `chain ${chainId}`;
 }
 
+// Render a chain-id list as "Ethereum, Optimism, Base, Arbitrum" — used
+// in the bell-flow success message so the user sees exactly which
+// chains they're now watching for the address. Order matches the input
+// (which the service preserves from the pending row).
+function formatChainList(chainIds: number[]): string {
+  return chainIds.map(chainLabel).join(', ');
+}
+
 function resolveChainShortName(raw: string | undefined): number | null {
   if (!raw) return null;
   const needle = raw.toLowerCase();
@@ -66,18 +74,33 @@ export async function handleStart(
       username: input.username,
     });
     switch (result.kind) {
-      case 'ok':
+      case 'ok': {
+        // The pending row carried 1..N chain ids; the result splits them
+        // into "newly added" vs "already had". Common case: bell flow →
+        // all four added. Mixed case (already had Ethereum, asked for
+        // all): we lead with the newly-added list and tack on a short
+        // "(already watching on …)" suffix so the user sees the full
+        // resulting state in one message.
+        const added = formatChainList(result.addedChainIds);
+        if (result.alreadyChainIds.length === 0) {
+          return {
+            reply: t('confirm.success', { eoa: result.eoa, chains: added }),
+          };
+        }
+        const already = formatChainList(result.alreadyChainIds);
         return {
-          reply: t('confirm.success', {
+          reply: t('confirm.successPartial', {
             eoa: result.eoa,
-            chain: chainLabel(result.chainId),
+            added,
+            already,
           }),
         };
+      }
       case 'already_subscribed':
         return {
           reply: t('confirm.alreadySubscribed', {
             eoa: result.eoa,
-            chain: chainLabel(result.chainId),
+            chains: formatChainList(result.chainIds),
           }),
         };
       case 'cap_reached':

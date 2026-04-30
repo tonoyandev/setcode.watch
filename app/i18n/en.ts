@@ -33,7 +33,7 @@ export const en = {
   'landing.hero.subhead':
     'Paste an address or connect your wallet. Get the current EIP-7702 delegation, its classification, and one-tap subscribe + watch in Telegram.',
 
-  'home.lookup.label': 'Ethereum address',
+  'home.lookup.label': 'EVM address',
   'home.lookup.placeholder': '0x… or click Connect Wallet',
   'home.lookup.submit': 'Look up delegation',
   'home.lookup.checking': 'Checking…',
@@ -42,6 +42,13 @@ export const en = {
   'home.lookup.hint':
     'Tip: connect a wallet to auto-fill this field and watch for account switches.',
   'home.lookup.autofilled': 'Filled from your connected wallet',
+  // Live-validity hints shown beneath the input as the user types.
+  // {have} interpolates the current character count of the address
+  // body (after stripping the leading 0x).
+  'home.lookup.hint.needs0x': 'Address must start with 0x.',
+  'home.lookup.hint.tooShort': 'Keep typing — {have}/40 characters after 0x.',
+  'home.lookup.hint.tooLong': 'Too long — {have}/40 characters after 0x.',
+  'home.lookup.hint.notHex': 'Some characters are not valid hex (0–9, a–f).',
 
   // Table-style results, one row per chain. Only Ethereum mainnet is in
   // scope today; L2s are tracked in docs/ROADMAP.md.
@@ -52,8 +59,17 @@ export const en = {
   'home.table.checking': 'Checking…',
   'home.table.awaitingInput': 'Enter an address above',
   'home.table.alertsUnsupported': 'Alerts not yet available',
+  'home.table.subscribeHint': 'Use the bell to subscribe',
   'home.table.mainnetsHeading': 'Mainnets',
   'home.table.testnetsHeading': 'Testnets',
+  // Sort cycles on the Chain + Delegation columns. Aria-labels describe
+  // the *next* state so SR users know what the click will do. Only one
+  // column is active at a time — clicking either resets the other.
+  'home.table.sort.toFoundFirst': 'Sort: delegations first',
+  'home.table.sort.toUnfoundFirst': 'Sort: not detected first',
+  'home.table.sort.toNameAsc': 'Sort: chain names A → Z',
+  'home.table.sort.toNameDesc': 'Sort: chain names Z → A',
+  'home.table.sort.toDefault': 'Sort: reset to default order',
   'home.chain.ethereumMainnet': 'Ethereum Mainnet',
 
   'home.result.title': 'Current delegation',
@@ -68,10 +84,17 @@ export const en = {
   'home.cta.subscribe': 'Subscribe',
   'home.cta.subscribe.tooltip':
     'Get a Telegram alert every time this address is delegated or the target changes. Requires a one-time confirmation in Telegram; you can unsubscribe any time with /remove.',
+  'home.cta.subscribe.bellAria': 'Subscribe to Telegram alerts on every monitored chain',
+  'home.cta.subscribe.bellTooltipTitle': 'Watch this address everywhere',
+  'home.cta.subscribe.bellTooltipBody':
+    'Most explorers only check. We watch — one tap subscribes you to alerts on Ethereum, Optimism, Base, and Arbitrum at once. Confirm once in Telegram, then we ping you the moment any of them gets a new EIP-7702 delegation or the classification changes.',
+  'home.cta.subscribe.bellTooltipDisabled':
+    'Paste an EVM address above first. The bell then mints a one-tap confirmation that subscribes you to alerts on every chain we index.',
   'home.cta.watch': 'Watch in Telegram',
   'home.cta.watch.tooltip':
     'Open the bot and see the current classification for this address — no subscription, no binding. Good for a one-off check or sharing a link.',
 
+  'home.confirm.close': 'Close',
   'home.confirm.title': 'Almost there — confirm in Telegram',
   'home.confirm.body':
     'Tap the button to open a pre-filled chat with the bot. The chat you confirm from becomes the subscriber for this address.',
@@ -155,7 +178,7 @@ export const en = {
   // Shared errors
   // --------------------------------------------------------------------
   'error.network': 'Could not reach the service. Check your connection and try again.',
-  'error.invalidAddress': 'That does not look like a valid Ethereum address.',
+  'error.invalidAddress': 'That does not look like a valid EVM address.',
   'error.generic': 'Something went wrong. Please try again.',
 } as const;
 

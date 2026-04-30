@@ -1,4 +1,4 @@
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { Address } from 'viem';
 import type { Db } from '../db/client.js';
 import * as schema from '../db/schema.js';
@@ -8,6 +8,9 @@ export type WatcherDb = Db;
 
 export interface ConfirmationsServiceOptions {
   confirmationTtlSeconds: number;
+  // Cap on distinct EOAs per chat. Subscribing to one EOA on every
+  // monitored chain counts as a single slot — the cap protects the chat
+  // from bot-noise + DB bloat, not from chain coverage.
   maxSubscriptionsPerChat: number;
   now?: () => Date;
 }
@@ -17,9 +20,24 @@ export interface CreatePendingResult {
   expiresAt: Date;
 }
 
+// `confirm` returns enough detail for the bot to render an accurate
+// success message: which chains were freshly subscribed vs. which the
+// chat was already watching for the same EOA. The two arrays partition
+// the requested chainIds set; both can be non-empty (e.g. user already
+// had Ethereum, asked for all four → addedChainIds=[10,8453,42161],
+// alreadyChainIds=[1]).
 export type ConfirmResult =
-  | { kind: 'ok'; eoa: Address; chainId: number }
-  | { kind: 'already_subscribed'; eoa: Address; chainId: number }
+  | {
+      kind: 'ok';
+      eoa: Address;
+      addedChainIds: number[];
+      alreadyChainIds: number[];
+    }
+  | {
+      kind: 'already_subscribed';
+      eoa: Address;
+      chainIds: number[];
+    }
   | { kind: 'cap_reached'; max: number }
   | { kind: 'expired' }
   | { kind: 'not_found' };
@@ -35,14 +53,25 @@ export function createConfirmationsService(db: WatcherDb, options: Confirmations
 
   async function createPending(input: {
     eoa: Address;
-    chainId: number;
+    // Always at least one — the HTTP layer defaults missing/empty to
+    // every supported chain id, which is the architectural shape of the
+    // bell-button flow.
+    chainIds: number[];
   }): Promise<CreatePendingResult> {
+    if (input.chainIds.length === 0) {
+      // Defensive: matches the DB CHECK constraint. Caller bug.
+      throw new Error('createPending: chainIds must be non-empty');
+    }
     const expiresAt = new Date(now().getTime() + options.confirmationTtlSeconds * 1000);
     const code = newConfirmationCode();
+    // Deduplicate so a `[1, 1]` request doesn't create a row that fans
+    // out to two identical inserts at confirm time (which would no-op
+    // on the unique index, but is cleaner to drop here).
+    const dedup = Array.from(new Set(input.chainIds));
     await db.insert(schema.pendingConfirmations).values({
       code,
       eoa: input.eoa,
-      chainId: input.chainId,
+      chainIds: dedup,
       expiresAt,
     });
     return { code, expiresAt };
@@ -69,35 +98,39 @@ export function createConfirmationsService(db: WatcherDb, options: Confirmations
     }
 
     const eoa = pending.eoa as Address;
-    const chainId = pending.chainId;
+    const requestedChainIds = pending.chainIds;
 
-    // Per-chain identity: a (eoa, chainId, chatId) tuple is what makes a
-    // subscription unique. The same EOA on Ethereum and Base under the
-    // same chat are two distinct rows, each generating its own alerts.
-    const [existing] = await db
-      .select()
+    // What does this chat already have for this EOA across the requested
+    // chain set? Splits into "already subscribed" (skip) vs "to insert".
+    const existingRows = await db
+      .select({ chainId: schema.subscriptions.chainId })
       .from(schema.subscriptions)
       .where(
         and(
           eq(schema.subscriptions.eoa, eoa),
-          eq(schema.subscriptions.chainId, chainId),
           eq(schema.subscriptions.telegramChatId, input.chatId),
+          eq(schema.subscriptions.confirmed, true),
+          inArray(schema.subscriptions.chainId, requestedChainIds),
         ),
-      )
-      .limit(1);
+      );
+    const alreadyChainIds = existingRows.map((r) => r.chainId);
+    const alreadySet = new Set(alreadyChainIds);
+    const addedChainIds = requestedChainIds.filter((id) => !alreadySet.has(id));
 
-    if (existing?.confirmed) {
+    if (addedChainIds.length === 0) {
+      // Nothing to do — the chat is already watching this EOA on every
+      // requested chain. Drop the pending row, tell the caller.
       await db
         .delete(schema.pendingConfirmations)
         .where(eq(schema.pendingConfirmations.code, input.code));
-      return { kind: 'already_subscribed', eoa, chainId };
+      return { kind: 'already_subscribed', eoa, chainIds: requestedChainIds };
     }
 
-    // Cap counts confirmed subscriptions across all chains for this chat.
-    // We don't want a user to bypass the cap by subscribing to the same
-    // EOA on every supported chain.
-    const confirmed = await db
-      .select({ id: schema.subscriptions.id })
+    // Cap counts distinct EOAs the chat is watching. Adding rows for an
+    // EOA the chat already follows on a different chain doesn't consume
+    // a slot — the cap is about user attention, not row count.
+    const distinctEoaRows = await db
+      .selectDistinct({ eoa: schema.subscriptions.eoa })
       .from(schema.subscriptions)
       .where(
         and(
@@ -105,36 +138,44 @@ export function createConfirmationsService(db: WatcherDb, options: Confirmations
           eq(schema.subscriptions.confirmed, true),
         ),
       );
-
-    if (confirmed.length >= options.maxSubscriptionsPerChat) {
+    const distinctEoas = new Set(distinctEoaRows.map((r) => r.eoa.toLowerCase()));
+    const wouldGrowCap = !distinctEoas.has(eoa.toLowerCase());
+    if (wouldGrowCap && distinctEoas.size >= options.maxSubscriptionsPerChat) {
       return { kind: 'cap_reached', max: options.maxSubscriptionsPerChat };
     }
 
-    if (existing) {
-      await db
-        .update(schema.subscriptions)
-        .set({
+    // Fan out: insert one subscription row per added chain id. We still
+    // honour any pre-existing unconfirmed rows (legacy flow) by upserting.
+    await db
+      .insert(schema.subscriptions)
+      .values(
+        addedChainIds.map((chainId) => ({
+          eoa,
+          chainId,
+          telegramChatId: input.chatId,
+          telegramUsername: input.username,
           confirmed: true,
           confirmedAt: now(),
-          telegramUsername: input.username,
-        })
-        .where(eq(schema.subscriptions.id, existing.id));
-    } else {
-      await db.insert(schema.subscriptions).values({
-        eoa,
-        chainId,
-        telegramChatId: input.chatId,
-        telegramUsername: input.username,
-        confirmed: true,
-        confirmedAt: now(),
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [
+          schema.subscriptions.eoa,
+          schema.subscriptions.chainId,
+          schema.subscriptions.telegramChatId,
+        ],
+        set: {
+          confirmed: true,
+          confirmedAt: now(),
+          telegramUsername: sql`EXCLUDED.telegram_username`,
+        },
       });
-    }
 
     await db
       .delete(schema.pendingConfirmations)
       .where(eq(schema.pendingConfirmations.code, input.code));
 
-    return { kind: 'ok', eoa, chainId };
+    return { kind: 'ok', eoa, addedChainIds, alreadyChainIds };
   }
 
   async function list(chatId: bigint): Promise<SubscriptionSummary[]> {

@@ -77,6 +77,13 @@ services:
       WATCHER_DISPATCH_BATCH_SIZE: ${WATCHER_DISPATCH_BATCH_SIZE:-100}
       WATCHER_RETENTION_SWEEP_INTERVAL_MS: ${WATCHER_RETENTION_SWEEP_INTERVAL_MS:-3600000}
       WATCHER_RETENTION_SWEEP_BATCH_SIZE: ${WATCHER_RETENTION_SWEEP_BATCH_SIZE:-10000}
+      # Per-chain RPC URLs for CheckService's live-state fallback. Same
+      # env keys as the indexer service reads — operators configure RPCs
+      # once. Missing values are tolerated (the fallback just no-ops).
+      ETH_RPC_URL: ${ETH_RPC_URL:-}
+      OP_RPC_URL: ${OP_RPC_URL:-}
+      BASE_RPC_URL: ${BASE_RPC_URL:-}
+      ARB_RPC_URL: ${ARB_RPC_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

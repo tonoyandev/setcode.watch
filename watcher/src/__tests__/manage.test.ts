@@ -65,7 +65,7 @@ async function subscribe(
   chatId: bigint,
   chainId = CHAIN_ID_MAINNET,
 ): Promise<void> {
-  const { code } = await h.confirmations.createPending({ eoa, chainId });
+  const { code } = await h.confirmations.createPending({ eoa, chainIds: [chainId] });
   await h.confirmations.confirm({ code, chatId, username: null });
 }
 

@@ -75,14 +75,33 @@ describe('handleStart', () => {
 
   it('forwards a valid c_ code to the service and formats each result', async () => {
     const results = [
-      { kind: 'ok', eoa: ADDR, chainId: 1 } as const,
-      { kind: 'already_subscribed', eoa: ADDR, chainId: 1 } as const,
+      // Bell-flow: subscribed to all four chains in one shot.
+      {
+        kind: 'ok',
+        eoa: ADDR,
+        addedChainIds: [1, 10, 8453, 42161],
+        alreadyChainIds: [],
+      } as const,
+      // Mixed: was already on Ethereum, asked for all → three new + one kept.
+      {
+        kind: 'ok',
+        eoa: ADDR,
+        addedChainIds: [10, 8453, 42161],
+        alreadyChainIds: [1],
+      } as const,
+      // Already had everything requested.
+      {
+        kind: 'already_subscribed',
+        eoa: ADDR,
+        chainIds: [1, 10, 8453, 42161],
+      } as const,
       { kind: 'cap_reached', max: 10 } as const,
       { kind: 'expired' } as const,
       { kind: 'not_found' } as const,
     ];
     const expected = [
       /Subscribed/,
+      /Newly watching/,
       /already receiving alerts/,
       /maximum of 10/,
       /expired/,
@@ -234,7 +253,7 @@ describe('handleRemove', () => {
   it('rejects a bad EOA', async () => {
     const service = makeService({});
     const { reply } = await handleRemove(service, { chatId: 1n, args: 'not-an-address' });
-    expect(reply).toMatch(/valid Ethereum address/);
+    expect(reply).toMatch(/valid EVM address/);
   });
 
   it('returns success when the service removed the sub', async () => {

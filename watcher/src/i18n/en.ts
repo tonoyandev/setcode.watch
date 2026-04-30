@@ -10,16 +10,18 @@ export const en = {
   'confirm.capReached':
     'You already have the maximum of {max} addresses subscribed in this chat. Remove one with /remove <address> before adding another.',
   'confirm.alreadySubscribed':
-    'You are already receiving alerts for {eoa} on {chain} in this chat.',
+    'You are already receiving alerts for {eoa} on {chains} in this chat.',
   'confirm.success':
-    'Subscribed. You will now receive alerts here when {eoa} is delegated to a new contract on {chain}.',
+    'Subscribed. You will now receive alerts here when {eoa} is delegated to a new contract on {chains}.',
+  'confirm.successPartial':
+    'Subscribed. Newly watching {eoa} on {added}. (You were already watching it on {already}.)',
   help: 'SetCode.watch bot — available commands:\n/list — show the EOAs you are watching in this chat\n/remove <address> [chain] — unsubscribe from an EOA (chain: eth | op | base | arb1; defaults to eth)\n/manage — open your subscriptions on the web\n/help — show this message\n\nSubscribe by entering an address on https://setcode.watch.',
   'list.empty':
     'You have no confirmed subscriptions in this chat. Add one on https://setcode.watch.',
   'list.header': 'You are watching {count} address(es) in this chat:',
   'remove.usage':
     'Usage: /remove 0xYourAddress [chain]\n\nchain: eth | op | base | arb1 (defaults to eth)',
-  'remove.invalidEoa': 'That does not look like a valid Ethereum address.',
+  'remove.invalidEoa': 'That does not look like a valid EVM address.',
   'remove.success':
     'Unsubscribed from {eoa} on {chain}. You will no longer receive alerts for this address in this chat.',
   'remove.notFound': 'You were not subscribed to {eoa} on {chain} in this chat.',

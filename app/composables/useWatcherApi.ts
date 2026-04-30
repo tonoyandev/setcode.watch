@@ -2,10 +2,16 @@ import type { Address } from 'viem';
 
 // Response shape returned by watcher's POST /confirmations endpoint.
 // Kept minimal — mirror changes here if watcher/src/http/server.ts changes.
+//
+// `chainIds` is the resolved list of chains this confirmation will
+// subscribe to once redeemed in Telegram. Server defaults missing/empty
+// to every supported chain; we surface it back so the UI can render
+// "watching on Ethereum, Optimism, Base, Arbitrum" without re-deriving.
 export interface CreateConfirmationResponse {
   code: string;
   deepLink: string;
   expiresAt: string;
+  chainIds: number[];
 }
 
 export type Classification = 'verified' | 'unknown' | 'malicious';
@@ -71,7 +77,11 @@ export class WatcherApiException extends Error {
 }
 
 interface WatcherApiClient {
-  createConfirmation(eoa: Address, chainId: number): Promise<CreateConfirmationResponse>;
+  // Bell-flow default: omit `chainIds` and the watcher subscribes the
+  // user to every monitored chain in one round-trip. Pass an explicit
+  // list when a surface needs per-chain confirmations (none today, but
+  // the option stays on the type for discoverability).
+  createConfirmation(eoa: Address, chainIds?: number[]): Promise<CreateConfirmationResponse>;
   check(eoa: Address, chainId: number): Promise<CheckResponse>;
   listManage(token: string): Promise<ManageListResponse>;
   removeManage(token: string, eoa: Address, chainId: number): Promise<ManageRemoveResponse>;
@@ -92,13 +102,20 @@ export function useWatcherApi(): WatcherApiClient {
 
   async function createConfirmation(
     eoa: Address,
-    chainId: number,
+    chainIds?: number[],
   ): Promise<CreateConfirmationResponse> {
     try {
+      // Omit `chainIds` from the body when caller didn't specify so the
+      // watcher applies its SUPPORTED_CHAIN_IDS default. We could send
+      // an explicit list from a frozen client-side catalog, but keeping
+      // the source of truth on the watcher avoids drift when a chain
+      // gets added.
+      const body: { eoa: Address; chainIds?: number[] } = { eoa };
+      if (chainIds && chainIds.length > 0) body.chainIds = chainIds;
       const response = await $fetch<CreateConfirmationResponse>('/confirmations', {
         baseURL: baseUrl,
         method: 'POST',
-        body: { eoa, chainId },
+        body,
       });
       return response;
     } catch (err: unknown) {

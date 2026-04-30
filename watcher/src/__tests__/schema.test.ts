@@ -124,10 +124,30 @@ describe('watcher schema migration', () => {
   it('rejects pending_confirmations with a malformed EOA', async () => {
     await expect(
       db.query(
-        `INSERT INTO pending_confirmations (code, eoa, chain_id, expires_at)
-         VALUES ('abc', '0xnothex', 1, NOW() + INTERVAL '5 minutes')`,
+        `INSERT INTO pending_confirmations (code, eoa, chain_ids, expires_at)
+         VALUES ('abc', '0xnothex', ARRAY[1]::integer[], NOW() + INTERVAL '5 minutes')`,
       ),
     ).rejects.toThrow();
+  });
+
+  it('rejects pending_confirmations with an empty chain_ids array', async () => {
+    await expect(
+      db.query(
+        `INSERT INTO pending_confirmations (code, eoa, chain_ids, expires_at)
+         VALUES ('abc2', '${ADDR_A}', ARRAY[]::integer[], NOW() + INTERVAL '5 minutes')`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('stores pending_confirmations with a multi-chain chain_ids array', async () => {
+    await db.query(
+      `INSERT INTO pending_confirmations (code, eoa, chain_ids, expires_at)
+       VALUES ('multi', '${ADDR_A}', ARRAY[1, 10, 8453, 42161]::integer[], NOW() + INTERVAL '5 minutes')`,
+    );
+    const { rows } = await db.query<{ chain_ids: number[] }>(
+      `SELECT chain_ids FROM pending_confirmations WHERE code = 'multi'`,
+    );
+    expect(rows[0]?.chain_ids).toEqual([1, 10, 8453, 42161]);
   });
 
   it('stores manage_tokens with optional revoked_at', async () => {

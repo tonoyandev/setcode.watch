@@ -1,10 +1,12 @@
 import { serve } from '@hono/node-server';
+import { SUPPORTED_CHAINS } from '@setcode/shared';
 import { createBot } from './bot/index.js';
 import { createDatabase } from './db/client.js';
 import { startDispatcherLoop } from './dispatcher/loop.js';
 import { createHttpApp } from './http/server.js';
 import {
   alertRetentionDays,
+  chainRpcUrls,
   confirmationTtlSeconds,
   corsOrigins,
   dispatchBatchSize,
@@ -43,7 +45,16 @@ async function main() {
   const manageService = createManageService(db, { webBaseUrl: webBaseUrl() });
 
   const classification = createClassificationService(db);
-  const checkService = createCheckService(db, { classification });
+  // Per-chain RPC URLs for the CheckService's live-state fallback. The
+  // indexer reads the same env keys; we just consume them here too so a
+  // single configuration drives both. Missing entries are no-ops on the
+  // fallback path — existing "Not Detected" behaviour is preserved.
+  const rpcUrls = chainRpcUrls(SUPPORTED_CHAINS);
+  for (const chain of SUPPORTED_CHAINS) {
+    const have = rpcUrls.has(chain.id) ? '✓' : '✗';
+    console.log(`[setcode/watcher] live-fallback RPC ${chain.shortName}: ${have}`);
+  }
+  const checkService = createCheckService(db, { classification, rpcUrls });
 
   const bot = createBot({ token, service, manage: manageService, check: checkService });
   const registryService = createRegistryService(db);
@@ -54,6 +65,9 @@ async function main() {
     registryService,
     botUsername,
     corsOrigins: corsOrigins(),
+    // Tell /check which chains it can reach. Includes the 4 indexed
+    // chains AND every public RPC we hardcode in public-rpcs.ts.
+    liveCheckableChainIds: Array.from(rpcUrls.keys()),
   });
   const telegram = createTelegramClient(token);
   const dispatcher = createDispatcherService(

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Loader2 } from 'lucide-vue-next';
 import type { Address } from 'viem';
-import { computed, ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import type { ChainMeta } from '~/composables/useChainCatalog';
 import { useInView } from '~/composables/useInView';
 import {
@@ -15,22 +15,12 @@ interface Props {
   chain: ChainMeta;
   // null means "no address entered yet" — row stays in idle state.
   address: Address | null;
-  // Monitored chains expose Subscribe/Watch CTAs in the actions cell.
-  // Unmonitored chains hide them entirely — we have no indexer for those
-  // so subscribing would never deliver alerts.
-  subscribing?: boolean;
 }
-const props = withDefaults(defineProps<Props>(), {
-  subscribing: false,
-});
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  // Subscribe carries chainId so the page can mint a confirmation scoped
-  // to the right chain (multi-chain support — each row's CTA targets its
-  // own chain, not just mainnet).
-  (e: 'subscribe', payload: { chainId: number }): void;
-  // Bubbled up so the page can disable the CTA when no delegation is
-  // present on mainnet, without needing to peek into row internals.
+  // Per-chain delegation result is bubbled up so the page can light up
+  // the central Subscribe popover with chain-by-chain status badges.
   (e: 'classified', payload: { chainId: number; result: CheckResponse }): void;
   // Fired when the user clicks the "Enter an address above" hint in the
   // idle state — page focuses the lookup input so they can start typing
@@ -39,8 +29,6 @@ const emit = defineEmits<{
 }>();
 
 const api = useWatcherApi();
-const config = useRuntimeConfig();
-const botUsername = config.public.botUsername;
 const rowEl = ref<HTMLTableRowElement | null>(null);
 const { hasBeenInView } = useInView(rowEl);
 
@@ -63,12 +51,23 @@ async function performCheck(addr: Address) {
     // table doesn't snap to "Not Detected" instantly (which reads as
     // "we didn't even try"). 220–420ms is short enough not to feel laggy.
     await new Promise((r) => setTimeout(r, 220 + Math.random() * 200));
+    // Address-changed-since-issue guard: if the user typed a new
+    // address while we were "fake-loading", don't clobber the new
+    // address's status with this one's "notDetected" outcome.
+    if (props.address !== addr) return;
     status.value = { kind: 'notDetected' };
     return;
   }
 
   try {
     const result = await api.check(addr, props.chain.id);
+    // Stale-response guard. A second performCheck for a newer address
+    // may have started while this network call was in flight; if it
+    // resolved first and wrote the row state, we mustn't overwrite it
+    // with this older result. Comparing to the live `props.address` is
+    // the cheapest correct check — Vue's prop reactivity guarantees it
+    // tracks the page's `checkedAddress` exactly.
+    if (props.address !== addr) return;
     if (!result.currentTarget) {
       status.value = { kind: 'notDetected' };
       return;
@@ -76,6 +75,10 @@ async function performCheck(addr: Address) {
     status.value = { kind: 'classified', classification: result.classification };
     emit('classified', { chainId: props.chain.id, result });
   } catch (err) {
+    // Same staleness guard on the failure path: if the user has moved
+    // on, swallow the error silently rather than flashing "notDetected"
+    // over a freshly-classified result.
+    if (props.address !== addr) return;
     // Treat watcher errors as "Not Detected" at the row level — the
     // page-level error banner shows the human message; the row stays
     // visually consistent with chains that genuinely have no data.
@@ -116,20 +119,28 @@ watch(
   { immediate: true },
 );
 
-const showActions = computed(() => props.chain.monitored);
-const subscribeDisabled = computed(() => status.value.kind !== 'classified' || props.subscribing);
-const watchVisible = computed(() => status.value.kind === 'classified');
-
-// Bot deep-link uses the multi-chain payload format `w_<chainId>_<addr>`.
-// Built per-row so each chain's Watch CTA targets its own chainId; the
-// bot resolves it back via parseWatchPayload(). Empty string until the
-// row has both an address to watch and a classification (matches the
-// previous "Watch" affordance which only appeared after classification).
-const watchLink = computed(() => {
-  const addr = props.address;
-  if (!addr || !watchVisible.value) return '';
-  return `https://t.me/${botUsername}?start=w_${props.chain.id}_${addr}`;
+// Late-mount catch-up. Rows inside the testnets table only mount when
+// the user expands it, which happens *after* an address was submitted.
+// The address watch only fires on changes, so without this hook a
+// late-mounting row would sit in 'idle' forever even though the page
+// already has an address waiting. Mirror what the address watch would
+// have done if it had fired: queue the row and kick the check if the
+// row is already in view.
+onMounted(() => {
+  if (props.address && status.value.kind === 'idle') {
+    status.value = { kind: 'queued' };
+    if (hasBeenInView.value) void performCheck(props.address);
+  }
 });
+
+// Note: this row used to render a per-chain "Watch in Telegram" CTA in
+// an Actions column. We removed it because (a) the bell at the top of
+// the page is the single Telegram entry point now, (b) the per-chain
+// Watch deep-link just rendered the same status the row was already
+// showing, and (c) twenty-five copies of the same button drowned out
+// the actually-useful information in the Delegation column. The bot's
+// w_<chainId>_<addr> handler is still wired up for direct/shared
+// links, but the website doesn't surface it any more.
 </script>
 
 <template>
@@ -163,34 +174,6 @@ const watchLink = computed(() => {
           {{ t('home.table.notDetected') }}
         </span>
       </template>
-    </td>
-    <td class="g-chain-row__cell g-chain-row__cell--actions">
-      <div v-if="showActions" class="g-chain-row__actions">
-        <GButton
-          type="button"
-          size="sm"
-          variant="primary"
-          :disabled="subscribeDisabled"
-          :loading="subscribing ?? false"
-          @click.stop="emit('subscribe', { chainId: chain.id })"
-        >
-          {{ t('home.cta.subscribe') }}
-        </GButton>
-        <GButton
-          v-if="watchVisible && watchLink"
-          as="a"
-          :href="watchLink"
-          size="sm"
-          variant="secondary"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {{ t('home.cta.watch') }}
-        </GButton>
-      </div>
-      <span v-else class="g-chain-row__faint g-chain-row__faint--right">
-        {{ t('home.table.alertsUnsupported') }}
-      </span>
     </td>
   </tr>
 </template>
@@ -273,17 +256,6 @@ const watchLink = computed(() => {
   opacity: 0.5;
 }
 
-.g-chain-row__cell--actions {
-  text-align: right;
-}
-
-.g-chain-row__actions {
-  display: inline-flex;
-  gap: var(--space-2);
-  justify-content: flex-end;
-  flex-wrap: wrap;
-}
-
 .g-chain-row__spin {
   animation: g-chain-row-spin 700ms linear infinite;
 }
@@ -310,13 +282,6 @@ const watchLink = computed(() => {
   .g-chain-row__cell--status {
     grid-column: 2;
     text-align: right;
-  }
-  .g-chain-row__cell--actions {
-    grid-column: 1 / -1;
-    text-align: left;
-  }
-  .g-chain-row__actions {
-    justify-content: flex-start;
   }
   .g-chain-row__faint--right {
     text-align: left;

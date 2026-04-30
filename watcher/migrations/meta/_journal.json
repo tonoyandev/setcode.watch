@@ -29,6 +29,13 @@
       "when": 1777270784527,
       "tag": "0003_gigantic_junta",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777311012778,
+      "tag": "0004_multichain_pending",
+      "breakpoints": true
     }
   ]
 }

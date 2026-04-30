@@ -79,3 +79,28 @@ export function retentionSweepBatchSize(): number {
 export function webBaseUrl(): string {
   return process.env.WATCHER_WEB_BASE_URL ?? 'http://localhost:3000';
 }
+
+// Per-chain RPC URLs for the CheckService's live-state fallback.
+//
+// Two sources, merged in order so env always wins:
+//   1. Hardcoded public RPCs from public-rpcs.ts — covers testnets
+//      and non-indexed L2s so the website can show live delegation
+//      state for any chain in the catalog.
+//   2. Env vars matching SUPPORTED_CHAINS' rpcEnvKey field
+//      (ETH_RPC_URL, OP_RPC_URL, …) — operator overrides for the
+//      indexed chains, typically pointing at paid RPC keys.
+//
+// Missing env entries are silently dropped — the watcher doesn't
+// *require* them, the fallback just no-ops for chains it can't reach.
+import { PUBLIC_RPC_BY_ID } from './public-rpcs.js';
+
+export function chainRpcUrls(
+  supported: ReadonlyArray<{ id: number; rpcEnvKey: string }>,
+): Map<number, string> {
+  const map = new Map<number, string>(PUBLIC_RPC_BY_ID);
+  for (const chain of supported) {
+    const url = process.env[chain.rpcEnvKey];
+    if (url && url.trim().length > 0) map.set(chain.id, url.trim());
+  }
+  return map;
+}
