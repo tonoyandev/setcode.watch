@@ -17,7 +17,7 @@ jobs:
       matrix:
         image: [indexer, watcher, app]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: docker/setup-buildx-action@v3
 
